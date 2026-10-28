@@ -31,6 +31,13 @@ Bluesky アカウントへ、本人の手動投稿とは別に、決まった内
 - `.github/workflows/daily-post.yml` — cron 9本（UTC）。発火した
   cron 文字列からスロットを特定する。手動実行時はスロットと
   dry-run を選べる。`POST_ENABLED` 変数がキルスイッチ。
+- `.github/workflows/keepalive.yml` — 月1回（毎月1日 12:17 JST
+  目安）空コミットを1つ push するだけのワークフロー。公開
+  リポジトリでは60日間リポジトリ活動がないとスケジュール実行が
+  GitHub に自動無効化され、ワークフローの実行自体は活動に
+  数えられないため、コミットで活動を途切れさせない。
+  `contents: write` 権限が必要で、初回は手動実行で push が
+  成功することを確認する。
 
 ## 文面について
 
