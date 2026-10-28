@@ -1,45 +1,50 @@
 {
+  "timezone": "Asia/Tokyo",
   "slots": [
     {
       "id": "recruit_night",
-      "template": "【自動投稿】ゲーム案募集中（{slot_time}）\n自作ミニゲーム集に入れる新しいゲームのアイデアを募集しています。思いついたら、このポストへの返信で教えてください。\nhttps://minigame-b1qp.onrender.com",
-      "time_jst": "01:00"
+      "time_jst": "01:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "greeting_morning",
-      "template": "【自動投稿】おはようございます。{date_ja}（{weekday_ja}）です。\n今日も自作ツールとゲームづくりをゆるく進めていきます。",
-      "time_jst": "08:00"
+      "time_jst": "08:00",
+      "template": "おはよう！🔆\n今日も1日頑張ろう！"
     },
     {
       "id": "recruit_morning",
-      "template": "【自動投稿】ゲーム案募集中（{slot_time}）\n自作ミニゲーム集に入れる新しいゲームのアイデアを募集しています。思いついたら、このポストへの返信で教えてください。\nhttps://minigame-b1qp.onrender.com",
-      "time_jst": "09:00"
+      "time_jst": "09:00",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "promo_morning",
-      "template": "【自動投稿】自作ミニゲーム集の宣伝です（{slot_time}）\nブラウザで遊べる自作ゲームだけを集めたポータルサイト。今はルーレットが遊べます。\nhttps://minigame-b1qp.onrender.com",
-      "time_jst": "10:00"
+      "time_jst": "10:00",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "greeting_noon",
-      "template": "【自動投稿】こんにちは。{date_ja}（{weekday_ja}）のお昼です。\n午後の作業もぼちぼちいきましょう。",
-      "time_jst": "12:00"
+      "time_jst": "12:00",
+      "template": "こんにちは！☀️\n今日も折り返し！頑張って！"
     },
     {
       "id": "promo_afternoon",
-      "template": "【自動投稿】自作ミニゲーム集の宣伝です（{slot_time}）\nブラウザで遊べる自作ゲームだけを集めたポータルサイト。今はルーレットが遊べます。\nhttps://minigame-b1qp.onrender.com",
-      "time_jst": "16:00"
+      "time_jst": "16:00",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "greeting_evening",
-      "template": "【自動投稿】こんばんは。{date_ja}（{weekday_ja}）もおつかれさまでした。\n夜の時間もゆるくいきましょう。",
-      "time_jst": "19:00"
+      "time_jst": "19:00",
+      "template": "こんばんは。🌙\n1日おつかれさま。\nゆっくり休んでね。"
     },
     {
       "id": "recruit_evening",
-      "template": "【自動投稿】ゲーム案募集中（{slot_time}）\n自作ミニゲーム集に入れる新しいゲームのアイデアを募集しています。思いついたら、このポストへの返信で教えてください。\nhttps://minigame-b1qp.onrender.com",
-      "time_jst": "20:00"
+      "time_jst": "20:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "greeting_night",
+      "time_jst": "22:00",
+      "template": "おやすみ、また明日。💤"
     }
-  ],
-  "timezone": "Asia/Tokyo"
+  ]
 }

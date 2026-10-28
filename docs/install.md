@@ -21,7 +21,7 @@
 `BLUESKY_APP_PASSWORD`（手順1のアプリパスワード）
 - Variables: `POST_ENABLED` は最初は作らない（＝dry-run のまま）
 3. Actions タブで `daily-post` を手動実行（workflow_dispatch）し、
-slot=all の dry-run で全8スロットの投稿文が表示されることを確認
+slot=all の dry-run で全9スロットの投稿文が表示されることを確認
 
 ## 3. 本番化
 
@@ -29,8 +29,8 @@ slot=all の dry-run で全8スロットの投稿文が表示されることを�
 2. Variables に `POST_ENABLED=true` を追加
 3. `daily-post` を手動実行し、slot を1つ選んで dry_run=false で
 1件だけ実投稿し、Bluesky 側で表示とリンクを確認
-4. 以後はスケジュール（1日8回、JST 01:00／08:00／09:00／10:00／
-12:00／16:00／19:00／20:00）で自動投稿される
+4. 以後はスケジュール（1日9回、JST 01:00／08:00／09:00／10:00／
+12:00／16:00／19:00／20:00／22:00）で自動投稿される
 
 ## 4. プロフィールの明示（推奨）
 

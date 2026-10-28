@@ -23,6 +23,7 @@ EXPECTED_TIMES = {
     "greeting_morning": "08:00",
     "greeting_noon": "12:00",
     "greeting_evening": "19:00",
+    "greeting_night": "22:00",
     "promo_morning": "10:00",
     "promo_afternoon": "16:00",
     "recruit_morning": "09:00",
@@ -30,18 +31,37 @@ EXPECTED_TIMES = {
     "recruit_night": "01:00",
 }
 
+URL = "https://minigame-b1qp.onrender.com/"
+EXPECTED_TEXTS = {
+    "greeting_morning": "おはよう！🔆\n今日も1日頑張ろう！",
+    "recruit_morning": "おはよう！🔆\nサイトに載せるゲーム案募集中！\n" + URL,
+    "promo_morning": "こんにちは！☀️\nサイトにてミニゲーム開発中！\n" + URL,
+    "greeting_noon": "こんにちは！☀️\n今日も折り返し！頑張って！",
+    "promo_afternoon": "こんにちは！☀️\nサイトにてミニゲーム開発中！\n" + URL,
+    "greeting_evening": "こんばんは。🌙\n1日おつかれさま。\nゆっくり休んでね。",
+    "recruit_evening": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\n" + URL,
+    "greeting_night": "おやすみ、また明日。💤",
+    "recruit_night": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\n" + URL,
+}
+
 
 class ConfigTests(unittest.TestCase):
-    def test_eight_slots_with_expected_times(self):
+    def test_nine_slots_with_expected_times(self):
         got = {s["id"]: s["time_jst"] for s in CONFIG["slots"]}
         self.assertEqual(got, EXPECTED_TIMES)
 
-    def test_all_slots_render_valid_and_unique(self):
+    def test_all_slots_render_valid(self):
         now = datetime(2026, 10, 29, 8, 0)  # a Thursday
-        texts = [render_slot(s, now) for s in CONFIG["slots"]]
-        for text in texts:
+        for slot in CONFIG["slots"]:
+            text = render_slot(slot, now)
             self.assertEqual(validate_post(text), [], text)
-        self.assertEqual(len(set(texts)), 8, "each slot must differ")
+
+    def test_texts_match_user_specified_wording(self):
+        # Golden test: the wording is exactly what the user specified
+        # on 2026-10-29 (no date placeholders, no auto-post prefix).
+        now = datetime(2026, 10, 29, 8, 0)
+        got = {s["id"]: render_slot(s, now) for s in CONFIG["slots"]}
+        self.assertEqual(got, EXPECTED_TEXTS)
 
     def test_greetings_match_their_kind(self):
         now = datetime(2026, 10, 29, 8, 0)
@@ -54,7 +74,7 @@ class ConfigTests(unittest.TestCase):
         for slot_id in ("promo_morning", "promo_afternoon",
                         "recruit_morning", "recruit_evening", "recruit_night"):
             text = render_slot(find_slot(CONFIG, slot_id), now)
-            self.assertIn("https://minigame-b1qp.onrender.com", text, slot_id)
+            self.assertIn(URL, text, slot_id)
 
     def test_find_slot_unknown(self):
         self.assertIsNone(find_slot(CONFIG, "no_such_slot"))
