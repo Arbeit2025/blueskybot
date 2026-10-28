@@ -1,6 +1,6 @@
 name: daily-post
 
-# 8 posts a day (JST). GitHub cron is UTC, so each entry below is
+# 9 posts a day (JST). GitHub cron is UTC, so each entry below is
 # JST minus 9 hours. The schedule string itself selects the slot in
 # the job step (see the case statement). Times are approximate:
 # GitHub Actions cron can be delayed several minutes.
@@ -14,6 +14,7 @@ on:
     - cron: "0 7 * * *"    # 16:00 JST promo_afternoon
     - cron: "0 10 * * *"   # 19:00 JST greeting_evening
     - cron: "0 11 * * *"   # 20:00 JST recruit_evening
+    - cron: "0 13 * * *"   # 22:00 JST greeting_night
   workflow_dispatch:
     inputs:
       slot:
@@ -30,6 +31,7 @@ on:
           - recruit_morning
           - recruit_evening
           - recruit_night
+          - greeting_night
       dry_run:
         description: "Dry-run only (post nothing)"
         type: boolean
@@ -68,6 +70,7 @@ jobs:
               "0 7 * * *")  SLOT="promo_afternoon" ;;
               "0 10 * * *") SLOT="greeting_evening" ;;
               "0 11 * * *") SLOT="recruit_evening" ;;
+              "0 13 * * *") SLOT="greeting_night" ;;
               *) echo "unknown schedule: $SCHEDULE"; exit 1 ;;
             esac
           fi
