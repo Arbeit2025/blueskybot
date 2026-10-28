@@ -1,12 +1,35 @@
 name: daily-post
 
-# Default schedule: 09:00 JST = 00:00 UTC. Change the cron to move it.
-# GitHub Actions cron can be delayed several minutes; treat as approximate.
+# 8 posts a day (JST). GitHub cron is UTC, so each entry below is
+# JST minus 9 hours. The schedule string itself selects the slot in
+# the job step (see the case statement). Times are approximate:
+# GitHub Actions cron can be delayed several minutes.
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 16 * * *"   # 01:00 JST recruit_night
+    - cron: "0 23 * * *"   # 08:00 JST greeting_morning
+    - cron: "0 0 * * *"    # 09:00 JST recruit_morning
+    - cron: "0 1 * * *"    # 10:00 JST promo_morning
+    - cron: "0 3 * * *"    # 12:00 JST greeting_noon
+    - cron: "0 7 * * *"    # 16:00 JST promo_afternoon
+    - cron: "0 10 * * *"   # 19:00 JST greeting_evening
+    - cron: "0 11 * * *"   # 20:00 JST recruit_evening
   workflow_dispatch:
     inputs:
+      slot:
+        description: "Slot to run (all = dry-run preview of every slot)"
+        type: choice
+        default: all
+        options:
+          - all
+          - greeting_morning
+          - greeting_noon
+          - greeting_evening
+          - promo_morning
+          - promo_afternoon
+          - recruit_morning
+          - recruit_evening
+          - recruit_night
       dry_run:
         description: "Dry-run only (post nothing)"
         type: boolean
@@ -27,11 +50,34 @@ jobs:
           # Kill switch: set the repository variable POST_ENABLED to
           # anything other than "true" (or delete it) to stop real posts.
           POST_ENABLED: ${{ vars.POST_ENABLED }}
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_SLOT: ${{ inputs.slot }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            python -m bot.post_daily
-          elif [ "${{ vars.POST_ENABLED }}" = "true" ]; then
-            python -m bot.post_daily --post
+          SLOT=""
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SLOT="$INPUT_SLOT"
           else
+            case "$SCHEDULE" in
+              "0 16 * * *") SLOT="recruit_night" ;;
+              "0 23 * * *") SLOT="greeting_morning" ;;
+              "0 0 * * *")  SLOT="recruit_morning" ;;
+              "0 1 * * *")  SLOT="promo_morning" ;;
+              "0 3 * * *")  SLOT="greeting_noon" ;;
+              "0 7 * * *")  SLOT="promo_afternoon" ;;
+              "0 10 * * *") SLOT="greeting_evening" ;;
+              "0 11 * * *") SLOT="recruit_evening" ;;
+              *) echo "unknown schedule: $SCHEDULE"; exit 1 ;;
+            esac
+          fi
+          echo "slot: $SLOT"
+          if [ "$SLOT" = "all" ]; then
             python -m bot.post_daily
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_DRY_RUN" = "true" ]; then
+            python -m bot.post_daily --slot "$SLOT"
+          elif [ "$POST_ENABLED" = "true" ]; then
+            python -m bot.post_daily --slot "$SLOT" --post
+          else
+            python -m bot.post_daily --slot "$SLOT"
           fi
