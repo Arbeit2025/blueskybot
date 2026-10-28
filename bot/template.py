@@ -23,13 +23,20 @@ _URL_RE = re.compile(r"https?://\S+")
 MAX_LENGTH = 300
 
 
-def render_template(template: str, now: datetime) -> str:
-    """Expand {date}, {date_ja} and {weekday_ja} for the given moment."""
+def render_template(template: str, now: datetime,
+                    extra: dict | None = None) -> str:
+    """Expand {date}, {date_ja}, {weekday_ja} (and any `extra` keys).
+
+    `extra` carries e.g. {"slot_time": "10:00"} so that two slots on
+    the same day that share a template still produce different texts.
+    """
     values = {
         "date": now.strftime("%Y-%m-%d"),
         "date_ja": f"{now.year}年{now.month}月{now.day}日",
         "weekday_ja": WEEKDAYS_JA[now.weekday()],
     }
+    if extra:
+        values.update(extra)
     text = template
     for key, value in values.items():
         text = text.replace("{" + key + "}", value)

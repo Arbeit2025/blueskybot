@@ -1,14 +1,16 @@
-"""Daily fixed-post CLI for Bluesky.
+"""Scheduled post CLI for Bluesky (8 slots a day).
 
-Default is dry-run: it renders today's post and prints it, posting
-nothing. A real post happens only when ALL of these are true:
-  --post is passed, POST_ENABLED=true is in the environment, and the
-  Bluesky handle + app password are set. This is deliberate: enabling
-  posting is a conscious step, never the default.
+Default is dry-run. Without --slot it renders every slot for today
+and posts nothing. With --slot <id> it handles just that slot.
+
+A real post happens only when ALL of these are true:
+  --post is passed, --slot names one slot, POST_ENABLED=true is in
+  the environment, and the Bluesky handle + app password are set.
 
 Usage:
-  python -m bot.post_daily                 # dry-run (default)
-  python -m bot.post_daily --post          # post, if enabled + creds set
+  python -m bot.post_daily                    # dry-run: all slots
+  python -m bot.post_daily --slot promo_morning          # dry-run: one slot
+  python -m bot.post_daily --slot promo_morning --post   # post, if enabled
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from bot.state import already_posted_on, load_state, record_post  # noqa: E402
+from bot.state import already_posted_slot, load_state, record_post_slot  # noqa: E402
 from bot.template import build_link_facets, render_template, validate_post  # noqa: E402
 
 REQUIRED_ENV = ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"]
@@ -33,9 +35,23 @@ def load_config(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def find_slot(config: dict, slot_id: str) -> dict | None:
+    for slot in config.get("slots", []):
+        if slot["id"] == slot_id:
+            return slot
+    return None
+
+
+def render_slot(slot: dict, now: datetime) -> str:
+    return render_template(
+        slot["template"], now, extra={"slot_time": slot["time_jst"]}
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Daily fixed post to Bluesky (dry-run by default)")
-    parser.add_argument("--post", action="store_true", help="actually post (needs POST_ENABLED=true)")
+    parser = argparse.ArgumentParser(description="Scheduled posts to Bluesky (dry-run by default)")
+    parser.add_argument("--post", action="store_true", help="actually post (needs --slot and POST_ENABLED=true)")
+    parser.add_argument("--slot", default=None, help="slot id from config (required for --post)")
     parser.add_argument("--config", default=str(ROOT / "config" / "post.json"))
     parser.add_argument("--state", default=str(ROOT / "state" / "last_post.json"))
     args = parser.parse_args(argv)
@@ -43,22 +59,45 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(Path(args.config))
     tz = ZoneInfo(config.get("timezone", "Asia/Tokyo"))
     now = datetime.now(tz)
-    text = render_template(config["template"], now)
-
-    problems = validate_post(text)
+    date_str = now.strftime("%Y-%m-%d")
     print(f"date: {now.strftime('%Y-%m-%d %H:%M')} ({config.get('timezone', 'Asia/Tokyo')})")
-    print("--- post text ---")
+
+    if args.slot is None:
+        if args.post:
+            print("refused: --post requires --slot. Nothing posted.")
+            return 1
+        for slot in config.get("slots", []):
+            text = render_slot(slot, now)
+            problems = validate_post(text)
+            print(f"--- slot {slot['id']} ({slot['time_jst']} JST) ---")
+            print(text)
+            if problems:
+                print("validation failed: " + "; ".join(problems))
+                return 1
+        print("dry-run: nothing was posted.")
+        return 0
+
+    slot = find_slot(config, args.slot)
+    if slot is None:
+        known = ", ".join(s["id"] for s in config.get("slots", []))
+        print(f"error: unknown slot '{args.slot}'. known slots: {known}")
+        return 1
+
+    text = render_slot(slot, now)
+    print(f"--- slot {slot['id']} ({slot['time_jst']} JST) ---")
     print(text)
     print("-----------------")
     print("cost: free (Bluesky API has no per-post charge)")
+
+    problems = validate_post(text)
     if problems:
         print("validation failed: " + "; ".join(problems))
         return 1
 
     state_path = Path(args.state)
     state = load_state(state_path)
-    if already_posted_on(state, now.strftime("%Y-%m-%d")):
-        print("skip: already posted today according to the state file")
+    if already_posted_slot(state, date_str, slot["id"]):
+        print("skip: this slot was already posted today according to the state file")
         return 0
 
     if not args.post:
@@ -80,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["BLUESKY_APP_PASSWORD"],
         facets=build_link_facets(text),
     )
-    record_post(state_path, now.strftime("%Y-%m-%d"), text)
+    record_post_slot(state_path, state, date_str, slot["id"], text)
     print(f"posted: uri={result.get('uri')}")
     return 0
 
