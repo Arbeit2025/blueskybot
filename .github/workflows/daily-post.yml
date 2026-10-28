@@ -1,0 +1,37 @@
+name: daily-post
+
+# Default schedule: 09:00 JST = 00:00 UTC. Change the cron to move it.
+# GitHub Actions cron can be delayed several minutes; treat as approximate.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run only (post nothing)"
+        type: boolean
+        default: true
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Post (or dry-run)
+        env:
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          # Kill switch: set the repository variable POST_ENABLED to
+          # anything other than "true" (or delete it) to stop real posts.
+          POST_ENABLED: ${{ vars.POST_ENABLED }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python -m bot.post_daily
+          elif [ "${{ vars.POST_ENABLED }}" = "true" ]; then
+            python -m bot.post_daily --post
+          else
+            python -m bot.post_daily
+          fi
