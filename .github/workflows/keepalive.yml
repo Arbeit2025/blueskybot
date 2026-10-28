@@ -1,0 +1,31 @@
+name: keepalive
+
+# GitHub automatically disables scheduled workflows in a public
+# repository after 60 days with no repository activity. A workflow
+# run by itself does not count as activity, but a commit does.
+# This workflow therefore makes one empty commit a month, so the
+# daily-post schedules keep running without anyone having to touch
+# the repository. Monthly is well inside the 60-day window.
+on:
+  schedule:
+    - cron: "17 3 1 * *" # 1st of month, 03:17 UTC (12:17 JST)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create empty keepalive commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keepalive [skip ci]"
+          git push
