@@ -23,6 +23,40 @@ WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]  # Monday = 0
 _URL_RE = re.compile(r"https?://\S+")
 MAX_LENGTH = 300
 
+# Characters that prose puts right after a URL but that are never part
+# of the address itself: sentence punctuation (ASCII and Japanese) and
+# closing brackets. The greedy \S+ match above swallows them into the
+# facet URI, producing a broken link (or an invalid facet the PDS
+# rejects). Closing brackets are only trimmed while unbalanced, so a
+# URL that legitimately contains "(...)" keeps its closing bracket.
+_TRAILING_PUNCT = ".,;:!?…,;:、。！？・\"'）】」』〉》"
+_CLOSERS = {")": "(", "]": "[", "}": "{"}
+# Japanese sentence punctuation and brackets can also appear in the
+# MIDDLE of a greedy match, when prose continues right after them
+# with no whitespace ("…https://example.com/。見てね"). These
+# characters are never part of a valid (ASCII) facet URI, so the
+# match is cut at the first one.
+_CJK_CUT = "。、！？・「」『』（）【】〈〉《》…‥"
+
+
+def clean_url(raw: str) -> str:
+    """Strip trailing prose punctuation from a matched URL."""
+    url = raw
+    cut = [url.find(ch) for ch in _CJK_CUT if ch in url]
+    if cut:
+        url = url[:min(cut)]
+    while url:
+        last = url[-1]
+        if last in _CLOSERS:
+            if url.count(_CLOSERS[last]) >= url.count(last):
+                break
+            url = url[:-1]
+        elif last in _TRAILING_PUNCT:
+            url = url[:-1]
+        else:
+            break
+    return url
+
 
 def render_template(template: str, now: datetime,
                     extra: dict | None = None) -> str:
@@ -82,20 +116,25 @@ def build_link_facets(text: str) -> list[dict]:
     for match in _URL_RE.finditer(text):
         byte_pos += len(text[char_pos:match.start()].encode("utf-8"))
         byte_start = byte_pos
-        byte_end = byte_start + len(match.group(0).encode("utf-8"))
+        url = clean_url(match.group(0))
+        if url in ("http://", "https://"):
+            char_pos = match.end()
+            byte_pos = byte_start + len(match.group(0).encode("utf-8"))
+            continue
+        byte_end = byte_start + len(url.encode("utf-8"))
         facets.append(
             {
                 "index": {"byteStart": byte_start, "byteEnd": byte_end},
                 "features": [
                     {
                         "$type": "app.bsky.richtext.facet#link",
-                        "uri": match.group(0),
+                        "uri": url,
                     }
                 ],
             }
         )
         char_pos = match.end()
-        byte_pos = byte_end
+        byte_pos = byte_start + len(match.group(0).encode("utf-8"))
     # Reference to `encoded` documents the byte basis; offsets above are
     # computed incrementally and match len(encoded) slicing.
     assert facets == [] or facets[-1]["index"]["byteEnd"] <= len(encoded)
