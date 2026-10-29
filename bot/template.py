@@ -9,12 +9,15 @@ duplicates. The fixed message therefore keeps its core text, but the
 template embeds {date} / {weekday_ja} so each day's post is unique.
 
 Bluesky's limit is 300 grapheme clusters. Python's len() counts code
-points, which is >= the grapheme count for ordinary Japanese/emoji
-text, so validating with len() is a safe (slightly strict) check.
+points and systematically overcounts emoji (a ZWJ family emoji is 5+
+code points but one cluster), so text_length below approximates the
+grapheme count for the common emoji/combining cases instead of
+rejecting drafts the PDS would accept.
 """
 from __future__ import annotations
 
 import re
+import unicodedata
 from string import Formatter
 from datetime import datetime
 
@@ -86,9 +89,61 @@ def contains_url(text: str) -> bool:
     return bool(_URL_RE.search(text))
 
 
+_ZWJ = "\u200d"  # zero width joiner
+
+
+def _is_extend(ch: str) -> bool:
+    """Code points that continue the current grapheme cluster."""
+    code = ord(ch)
+    if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Mc", "Me"):
+        return True
+    if 0xFE00 <= code <= 0xFE0F or 0xE0100 <= code <= 0xE01EF:
+        return True  # variation selectors
+    if 0xE0020 <= code <= 0xE007F:
+        return True  # tag characters
+    if 0x1F3FB <= code <= 0x1F3FF:
+        return True  # emoji skin-tone modifiers
+    return False
+
+
+def _is_regional_indicator(ch: str) -> bool:
+    return 0x1F1E6 <= ord(ch) <= 0x1F1FF
+
+
 def text_length(text: str) -> int:
-    """Conservative length: code points (>= grapheme clusters)."""
-    return len(text)
+    """Approximate grapheme-cluster count, the unit of the 300 limit.
+
+    Covers the common cluster rules: combining marks, variation
+    selectors, tags and skin-tone modifiers continue a cluster; a
+    ZWJ joins the next code point into the same cluster; regional
+    indicators pair up into one flag. Plain text counts exactly as
+    before. This stays an approximation of UAX #29: exotic scripts
+    may still be overcounted, which keeps validation on the safe
+    side, but ordinary emoji no longer inflate the count.
+    """
+    count = 0
+    after_zwj = False
+    ri_run = 0
+    for ch in text:
+        if after_zwj:
+            after_zwj = ch == _ZWJ
+            ri_run = 0
+            continue
+        if ch == _ZWJ:
+            after_zwj = True
+            ri_run = 0
+            continue
+        if _is_extend(ch):
+            ri_run = 0
+            continue
+        if _is_regional_indicator(ch):
+            ri_run += 1
+            if ri_run % 2 == 1:
+                count += 1
+            continue
+        ri_run = 0
+        count += 1
+    return count
 
 
 def validate_post(text: str) -> list[str]:
