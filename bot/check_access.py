@@ -5,8 +5,9 @@ This module has no createRecord call and never prints session tokens.
 from __future__ import annotations
 
 import os
+import time
 
-from bot.bsky_client import BskyError, _list_recent_records, create_session, pds_url
+from bot.bsky_client import BskyError, _get_slot_record, _list_recent_records, create_session, pds_url
 from bot.reporting import finish_report, new_report
 
 
@@ -23,7 +24,11 @@ def main() -> int:
             root = pds_url()
             session = create_session(os.environ["BLUESKY_HANDLE"], os.environ["BLUESKY_APP_PASSWORD"], root)
             records = _list_recent_records(root, session)
-            report["outcomes"].append({"status": "access_verified", "detail": f"authenticated; {len(records)} recent record(s) readable; no post sent"})
+            if records:
+                record=records[0]
+                _get_slot_record(root,session,record["uri"].rsplit("/",1)[1],record["value"]["text"],sleep=time.sleep)
+            direct = "direct lookup completed" if records else "direct lookup not applicable (empty history)"
+            report["outcomes"].append({"status": "access_verified", "detail": f"authenticated; {len(records)} record(s) readable; {direct}; no post sent"})
         except BskyError as exc:
             code = 1
             status = "authentication_error" if exc.status in (401, 403) else "api_error"

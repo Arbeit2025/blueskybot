@@ -158,6 +158,7 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
             facets=build_link_facets(text),
             slot_date=scheduled_at.date(),
             slot_time=slot_time,
+            slot_id=slot["id"],
             tz_name=config.get("timezone", "Asia/Tokyo"),
         )
     except BskyError as exc:

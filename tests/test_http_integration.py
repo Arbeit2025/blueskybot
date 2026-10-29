@@ -33,6 +33,13 @@ class HttpIntegrationTests(unittest.TestCase):
                 self.end_headers()
                 self.wfile.write(body)
 
+            def reject(self):
+                body=b'{"error":"RecordNotFound"}'
+                self.send_response(400)
+                self.send_header("Content-Length",str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
             def do_POST(self):
                 payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 calls.append(self.path)
@@ -43,7 +50,8 @@ class HttpIntegrationTests(unittest.TestCase):
                     test.assertEqual(self.headers.get("Authorization"), "Bearer fake-token")
                     test.assertEqual(payload["repo"], "did:plc:fake")
                     test.assertEqual(payload["collection"], "app.bsky.feed.post")
-                    uri = f"at://did:plc:fake/app.bsky.feed.post/record{len(records) + 1}"
+                    key=payload.get("rkey",f"record{len(records)+1}")
+                    uri = f"at://did:plc:fake/app.bsky.feed.post/{key}"
                     records.insert(0, {"uri": uri, "value": payload["record"]})
                     self.respond({"uri": uri, "cid": "fake-cid"})
                 else:
@@ -51,6 +59,12 @@ class HttpIntegrationTests(unittest.TestCase):
 
             def do_GET(self):
                 parsed = urlparse(self.path)
+                if parsed.path.endswith("getRecord"):
+                    key=parse_qs(parsed.query)["rkey"][0]
+                    found=next((r for r in records if r["uri"].endswith("/"+key)),None)
+                    if found:self.respond(found)
+                    else:self.reject()
+                    return
                 test.assertTrue(parsed.path.endswith("listRecords"))
                 test.assertEqual(parse_qs(parsed.query)["reverse"], ["true"])
                 self.respond({"records": records[:100]})

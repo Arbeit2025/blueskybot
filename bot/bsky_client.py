@@ -43,6 +43,7 @@ unit-tested.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import time as time_module
@@ -60,6 +61,7 @@ WINDOW_AFTER = timedelta(minutes=120)
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 _DID_RE = re.compile(r"did:[a-z0-9]+:[^\s/?#]+")
 _RKEY_RE = re.compile(r"[A-Za-z0-9._:~-]{1,512}")
+_TID_ALPHABET = "234567abcdefghijklmnopqrstuvwxyz"
 
 
 class BskyError(Exception):
@@ -85,6 +87,46 @@ def is_post_uri(uri: object, expected_did: str | None = None,
                 and _RKEY_RE.fullmatch(rkey) and rkey not in (".", "..")
                 and (expected_did is None or did == expected_did)
                 and (expected_rkey is None or rkey == expected_rkey))
+
+
+def slot_record_key(slot_date: date, slot_time: time, tz: ZoneInfo,
+                    slot_id: str) -> str:
+    """Stable, syntactically valid TID for a configured date/time/slot.
+
+    Config validation forbids duplicate times. The timestamp separates
+    configured slots; the deterministic clock bits also include the ID.
+    Record createdAt remains the actual sending time, not this key's time.
+    """
+    scheduled = datetime.combine(slot_date, slot_time, tzinfo=tz)
+    microseconds = int(scheduled.timestamp()) * 1_000_000
+    if not 0 <= microseconds < (1 << 53):
+        raise BskyError("scheduled date cannot be represented by a TID")
+    clock = int.from_bytes(hashlib.sha256(slot_id.encode("utf-8")).digest()[:2], "big") & 1023
+    value = (microseconds << 10) | clock
+    return "".join(_TID_ALPHABET[(value >> shift) & 31] for shift in range(60, -1, -5))
+
+
+def _get_slot_record(root: str, session: dict, rkey: str, text: str, *, sleep) -> str | None:
+    query = urllib.parse.urlencode({"repo": session["did"], "collection": POST_COLLECTION, "rkey": rkey})
+    try:
+        result = _with_retry(lambda: _get_json(f"{root}/xrpc/com.atproto.repo.getRecord?{query}",
+                                               token=session["accessJwt"]), sleep=sleep)
+    except BskyError as exc:
+        if exc.status in (400, 404) and exc.error_code == "RecordNotFound":
+            return None
+        raise
+    value = result.get("value")
+    if not is_post_uri(result.get("uri"), session["did"], rkey) or not isinstance(value, dict) \
+            or value.get("$type") != POST_COLLECTION or not isinstance(value.get("createdAt"), str):
+        raise BskyError("getRecord returned a malformed slot record")
+    if value.get("text") != text:
+        raise BskyError("slot key contains a different post; refusing to overwrite", error_code="SlotConflict")
+    try:
+        if datetime.fromisoformat(value["createdAt"].replace("Z", "+00:00")).tzinfo is None:
+            raise ValueError("timezone missing")
+    except ValueError as exc:
+        raise BskyError("slot record has an invalid timestamp") from exc
+    return result["uri"]
 
 
 def pds_url() -> str:
@@ -298,6 +340,7 @@ def create_post(text: str, handle: str, app_password: str,
                 base: str | None = None, *,
                 slot_date: date | None = None,
                 slot_time: time | None = None,
+                slot_id: str | None = None,
                 tz_name: str = "Asia/Tokyo",
                 sleep=time_module.sleep,
                 attempts: int = MAX_ATTEMPTS) -> dict:
@@ -312,11 +355,20 @@ def create_post(text: str, handle: str, app_password: str,
     """
     if not isinstance(attempts, int) or isinstance(attempts, bool) or not 1 <= attempts <= MAX_ATTEMPTS:
         raise BskyError("attempts must be an integer between 1 and 3")
+    if slot_id is not None and (not isinstance(slot_id, str) or not slot_id or slot_date is None or slot_time is None):
+        raise BskyError("slot_id requires a non-empty ID, scheduled date and time")
     root = (base or pds_url()).rstrip("/")
-    session = create_session(handle, app_password, root, sleep=sleep)
     tz = ZoneInfo(tz_name)
+    rkey = slot_record_key(slot_date, slot_time, tz, slot_id) if slot_id is not None else None
+    session = create_session(handle, app_password, root, sleep=sleep)
 
-    def check_existing() -> str | None:
+    def check_existing(*, legacy: bool = True) -> str | None:
+        if rkey is not None:
+            known = _get_slot_record(root, session, rkey, text, sleep=sleep)
+            if known:
+                return known
+        if not legacy:
+            return None
         if slot_date is None or slot_time is None:
             return None
         records = _list_recent_records(root, session, sleep=sleep)
@@ -330,6 +382,9 @@ def create_post(text: str, handle: str, app_password: str,
         return {"uri": existing, "already_posted": True}
 
     record = build_post_record(text, facets)
+    payload = {"repo": session["did"], "collection": POST_COLLECTION, "record": record}
+    if rkey is not None:
+        payload["rkey"] = rkey
     last_error: BskyError | None = None
     for attempt in range(attempts):
         if attempt > 0:
@@ -342,19 +397,20 @@ def create_post(text: str, handle: str, app_password: str,
         try:
             result = _post_json(
                 f"{root}/xrpc/com.atproto.repo.createRecord",
-                {
-                    "repo": session["did"],
-                    "collection": POST_COLLECTION,
-                    "record": record,
-                },
+                payload,
                 token=session["accessJwt"],
             )
         except BskyError as exc:
+            if rkey is not None and exc.status in (400, 409):
+                # Another run may have created this same key after our lookup.
+                found = check_existing(legacy=False)
+                if found:
+                    return {"uri": found, "already_posted": True}
             if not exc.transient:
                 raise
             last_error = exc
             continue
-        uri = _validate_created(result, session["did"])
+        uri = _validate_created(result, session["did"], rkey)
         if uri:
             return {"uri": uri, "cid": result["cid"]}
         # A "success" response without a usable uri/cid is not proof
@@ -369,5 +425,9 @@ def create_post(text: str, handle: str, app_password: str,
             "createRecord returned a malformed response (no valid "
             "uri/cid) and the post was not found on the server"
         )
+    # Even the last attempt may have been stored before its response was lost.
+    found = check_existing()
+    if found:
+        return {"uri": found, "already_posted": True}
     assert last_error is not None
     raise last_error
