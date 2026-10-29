@@ -170,16 +170,23 @@ class HealthTests(unittest.TestCase):
     def setUp(self):
         self.now = datetime(2026, 10, 30, 8, 40, tzinfo=TZ)
         self.ops = {**OPERATIONS, "monitor_since_utc": "2026-10-29T22:59:00Z"}
+        self.ops["expected_did"]="did:plc:fake"
 
     def run_record(self, event="schedule", age=5, conclusion="success", path=".github/workflows/daily-post.yml"):
-        return {"id": 100, "event": event, "path": path, "conclusion": conclusion,
+        return {"id": 100, "event": event, "path": path, "conclusion": conclusion, "status":"completed",
                 "created_at": (self.now - timedelta(minutes=age)).isoformat()}
 
     def feed(self, slot_id="greeting_morning", when=None):
         slot = post_daily.find_slot(CONFIG, slot_id)
         when = when or self.now.replace(hour=8, minute=3)
         return {"feed": [{"post": {"uri": "at://did:plc:fake/app.bsky.feed.post/abc",
-                         "record": {"text": post_daily.render_slot(slot, when), "createdAt": when.isoformat()}}}]}
+                         "author":{"did":"did:plc:fake"},
+                         "record": {"$type":"app.bsky.feed.post","text": post_daily.render_slot(slot, when), "createdAt": when.isoformat()}}}]}
+
+    def execution(self,status,code):
+        return {"source":"issues","mode":"event_gate" if status=="disabled" else "post",
+                "exit_code":code,"counts":{status:1},"outcomes":[{"status":status}],
+                "started_at":(self.now-timedelta(minutes=1)).isoformat(),"finished_at":self.now.isoformat()}
 
     def assess(self, runs=None, feed=None, execution=None):
         return health.assess({"workflow_runs": runs or []}, feed if feed is not None else self.feed(),
@@ -208,11 +215,11 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(result["missing_slots"], [])
 
     def test_disabled_is_not_successfully_posted(self):
-        result = self.assess(execution={"counts": {"disabled": 1}, "exit_code": 0})
+        result = self.assess(execution=self.execution("disabled",0))
         self.assertEqual(result["status"], "disabled")
 
     def test_execution_failure_is_reported_even_before_post_deadline(self):
-        result = self.assess([self.run_record()], execution={"counts": {"authentication_error": 1}, "exit_code": 1})
+        result = self.assess([self.run_record()], execution=self.execution("authentication_error",1))
         self.assertIn("execution_failed", result["problems"])
         self.assertEqual(result["status"], "unhealthy")
 
