@@ -81,9 +81,11 @@ https://minigame-b1qp.onrender.com/ を付ける。
   されていた」可能性を照合してから投稿し直す。4xx（429除く）は
   即時失敗にする。
 - **投稿専用。** いいね・フォロー・返信はしない。
-- **外部からの補助起動と監視。** GitHub Actionsの定期実行に加え、
-  ChatGPTの毎時タスクから運用Issue #2を更新して未投稿を確認する。
-  認証情報はGitHub内だけで使う。外部タスクは1時間間隔。
+- **外部の補助起動・状態更新はMuse担当。** GitHub Actionsの定期実行に加え、
+  運用Issue #2の `external_tick_utc` とhealth関連の状態を更新する外部担当は
+  Museに一本化する。ChatGPTはIssue #2を一切編集せず、読み取り専用の監視を行う。
+  認証情報はGitHub内だけで使う。担当範囲とMuse側の稼働確認手順は
+  [運用手順](docs/operations.md)・[外部タスクの実行手順](docs/watchdog-task.md)を参照。
 - **実行結果を区別。** 投稿成功・投稿済み・対象なし・確認実行・
   意図的な停止・設定不足・認証エラーをActions SummaryとJSONに残す。
 - **リンクは facets で clickable にする。** API 経由の投稿では
@@ -118,3 +120,4 @@ GitHub の repository variable `POST_ENABLED` を明示的に `false` にする�
 
 詳しい導入手順は `docs/install.md`、設計は `docs/design.md`。
 外部起動・監視・投稿しない本番接続確認は [運用手順](docs/operations.md) を参照。
+
