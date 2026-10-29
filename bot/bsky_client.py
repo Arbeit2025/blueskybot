@@ -492,10 +492,6 @@ def create_post(text: str, handle: str, app_password: str,
     if existing:
         return {"uri": existing, "already_posted": True}
 
-    record = build_post_record(text, facets)
-    payload = {"repo": session["did"], "collection": POST_COLLECTION, "record": record}
-    if rkey is not None:
-        payload["rkey"] = rkey
     last_error: BskyError | None = None
     for attempt in range(attempts):
         if attempt > 0:
@@ -505,6 +501,16 @@ def create_post(text: str, handle: str, app_password: str,
             if found:
                 return {"uri": found, "already_posted": True}
             sleep(_retry_delay(attempt - 1, last_error))
+        # Build the record inside the loop: createdAt must be the
+        # time of THIS attempt. A record built once before the loop
+        # goes stale while retries wait (especially with a long
+        # Retry-After), and a stale createdAt can fall outside the
+        # slot window the duplicate check and health monitor use.
+        # The stable rkey makes rebuilding safe.
+        record = build_post_record(text, facets)
+        payload = {"repo": session["did"], "collection": POST_COLLECTION, "record": record}
+        if rkey is not None:
+            payload["rkey"] = rkey
         try:
             result = _post_json(
                 f"{root}/xrpc/com.atproto.repo.createRecord",

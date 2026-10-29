@@ -11,7 +11,15 @@ import hashlib
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
+
+# Posted-slot entries older than this many days (relative to the
+# entry being recorded) are pruned on save. The duplicate guard only
+# ever looks up today's key, so keeping history forever only grows
+# the file on long-lived local installs. 7 days keeps a useful audit
+# trail while bounding the size; unparsable keys are never deleted.
+STATE_RETENTION_DAYS = 7
 
 
 class StateError(OSError):
@@ -96,9 +104,28 @@ def already_posted_slot(state: dict, date_str: str, slot_id: str) -> bool:
     return slot_key(date_str, slot_id) in state.get("posted", {})
 
 
+def _prune_posted(posted: dict, current_date_str: str) -> dict:
+    try:
+        current = datetime.strptime(current_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return posted
+    cutoff = current - timedelta(days=STATE_RETENTION_DAYS)
+    kept = {}
+    for key, value in posted.items():
+        date_part = key.split(":", 1)[0]
+        try:
+            entry_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+        except ValueError:
+            kept[key] = value  # unknown format: never delete blindly
+            continue
+        if entry_date >= cutoff:
+            kept[key] = value
+    return kept
+
+
 def record_post_slot(path: Path, state: dict, date_str: str, slot_id: str,
                      text: str) -> dict:
-    posted = dict(state.get("posted", {}))
+    posted = _prune_posted(dict(state.get("posted", {})), date_str)
     posted[slot_key(date_str, slot_id)] = text_hash(text)
     payload = {"posted": posted}
     atomic_write_state(path, payload)
