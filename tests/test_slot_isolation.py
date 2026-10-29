@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from bot import health, post_daily
 
 TZ = ZoneInfo("Asia/Tokyo")
-NOW = datetime(2026, 10, 30, 10, 5, tzinfo=TZ)  # recruit_morning + promo_morning due
+NOW = datetime(2026, 10, 30, 10, 5, tzinfo=TZ)  # eight slots due (08:15-10:00)
 
 
 def _fake_run_slot_factory(fail_slot_id):
@@ -63,15 +63,17 @@ class SlotIsolationTests(unittest.TestCase):
         self.assertIn("internal_error", statuses)
         self.assertIn("posted", statuses)
         self.assertEqual(report["counts"].get("internal_error"), 1)
-        self.assertEqual(report["counts"].get("posted"), 1)
+        self.assertEqual(report["counts"].get("posted"), 7)  # the other due slots
         self.assertEqual(report["exit_code"], 1)
 
     def test_second_slot_crash_still_reports_first(self):
+        # promo_morning (10:00) is the last of the eight due slots.
         code, report = self._run_due("promo_morning")
         self.assertEqual(code, 1)
         statuses = [o["status"] for o in report["outcomes"]]
         self.assertEqual(statuses[0], "posted")
-        self.assertEqual(statuses[1], "internal_error")
+        self.assertEqual(statuses[-1], "internal_error")
+        self.assertEqual(len(statuses), 8)
 
     def test_no_crash_keeps_exit_zero(self):
         code, report = self._run_due("no_such_slot")

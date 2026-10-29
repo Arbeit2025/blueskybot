@@ -1,4 +1,4 @@
-"""Scheduled post CLI for Bluesky (9 slots a day).
+"""Scheduled post CLI for Bluesky (96 slots a day, every 15 minutes).
 
 Default is dry-run. Without a selection it renders every slot for today
 and posts nothing. --slot selects one slot; --due selects recent due slots.

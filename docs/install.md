@@ -22,7 +22,7 @@
 - Variables: `POST_ENABLED=false` を明示して意図的な停止状態で始める。
   未設定は設定エラーになる。手動の既定プレビューは引き続き投稿しない。
 3. Actions タブで `daily-post` を手動実行（workflow_dispatch）し、
-slot=all の dry-run で全9スロットの投稿文が表示されることを確認
+slot=all の dry-run で全96スロットの投稿文が表示されることを確認
 
 ## 3. 本番化
 
