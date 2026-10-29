@@ -44,7 +44,7 @@
     {
       "id": "greeting_night",
       "time_jst": "22:00",
-      "template": "おやすみ、また明日。💤"
+      "template": "test"
     }
   ]
 }
