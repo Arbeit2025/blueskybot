@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,7 +36,41 @@ CATCHUP_WINDOW = timedelta(hours=2)
 
 
 def load_config(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    config = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        raise ValueError("config must be a JSON object")
+    timezone_name = config.get("timezone", "Asia/Tokyo")
+    if not isinstance(timezone_name, str) or not timezone_name:
+        raise ValueError("timezone must be a non-empty string")
+    try:
+        ZoneInfo(timezone_name)
+    except (KeyError, ValueError) as exc:
+        raise ValueError("unknown timezone") from exc
+    slots = config.get("slots")
+    if not isinstance(slots, list) or not slots:
+        raise ValueError("slots must be a non-empty list")
+    ids, times = set(), set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            raise ValueError("each slot must be an object")
+        slot_id, clock, template = slot.get("id"), slot.get("time_jst"), slot.get("template")
+        if not isinstance(slot_id, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", slot_id):
+            raise ValueError("slot id must be 1-64 ASCII letters, digits, underscore or dash, starting with a letter")
+        if slot_id in ids:
+            raise ValueError("duplicate slot id")
+        ids.add(slot_id)
+        if not isinstance(clock, str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", clock):
+            raise ValueError("slot time must use HH:MM (00:00-23:59)")
+        if clock in times:
+            raise ValueError("duplicate slot time")
+        times.add(clock)
+        if not isinstance(template, str):
+            raise ValueError("slot template must be a string")
+        # December 31 exercises the longest date expansion for supported years.
+        rendered = render_slot(slot, datetime(2000, 12, 31))
+        if validate_post(rendered):
+            raise ValueError("slot template renders an empty or oversized post")
+    return config
 
 
 def find_slot(config: dict, slot_id: str) -> dict | None:

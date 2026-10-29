@@ -15,6 +15,7 @@ text, so validating with len() is a safe (slightly strict) check.
 from __future__ import annotations
 
 import re
+from string import Formatter
 from datetime import datetime
 
 WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]  # Monday = 0
@@ -37,10 +38,14 @@ def render_template(template: str, now: datetime,
     }
     if extra:
         values.update(extra)
-    text = template
-    for key, value in values.items():
-        text = text.replace("{" + key + "}", value)
-    return text
+    pieces = []
+    for literal, field, spec, conversion in Formatter().parse(template):
+        pieces.append(literal)
+        if field is not None:
+            if field not in values or spec or conversion:
+                raise ValueError("unsupported template field or format")
+            pieces.append(str(values[field]))
+    return "".join(pieces)
 
 
 def contains_url(text: str) -> bool:

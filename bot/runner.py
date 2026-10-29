@@ -18,18 +18,26 @@ CONTROL_ISSUE = 2
 
 
 def trusted_external_event(event: dict) -> bool:
+    if not isinstance(event, dict):
+        return False
     repository = event.get("repository", {})
-    owner = repository.get("owner", {}).get("login")
     issue = event.get("issue", {})
+    sender, changes = event.get("sender", {}), event.get("changes", {})
+    if not all(isinstance(value, dict) for value in (repository, issue, sender, changes)):
+        return False
+    repo_owner, issue_user = repository.get("owner", {}), issue.get("user", {})
+    if not isinstance(repo_owner, dict) or not isinstance(issue_user, dict):
+        return False
+    owner = repo_owner.get("login")
     return bool(
         repository.get("full_name") == REPOSITORY
         and owner == "Arbeit2025"
         and event.get("action") == "edited"
         and issue.get("number") == CONTROL_ISSUE
         and issue.get("state") == "open"
-        and issue.get("user", {}).get("login") == owner
-        and event.get("sender", {}).get("login") == owner
-        and "body" in event.get("changes", {})
+        and issue_user.get("login") == owner
+        and sender.get("login") == owner
+        and "body" in changes
     )
 
 
