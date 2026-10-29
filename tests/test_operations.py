@@ -250,10 +250,30 @@ class HealthTests(unittest.TestCase):
 
     def test_monitor_checks_previous_day_after_midnight(self):
         self.now = datetime(2026, 10, 30, 0, 10, tzinfo=TZ)
-        self.ops["monitor_since_utc"] = "2026-10-29T12:50:00Z"
-        when = datetime(2026, 10, 29, 22, 3, tzinfo=TZ)
-        result = self.assess([self.run_record()], self.feed("greeting_night", when))
-        self.assertEqual(result["expected_slots"], ["2026-10-29:greeting_night"])
+        self.ops["monitor_since_utc"] = "2026-10-29T12:50:00Z"  # 21:50 JST
+        # Expected: the Oct 29 slots from 21:50 up to the grace cutoff
+        # (23:40): 22:00, 22:15, 22:30, 22:45, 23:00, 23:15, 23:30.
+        # Build the feed with each slot's own record key, as the real
+        # posting path does, each created 3 minutes after its slot.
+        items = []
+        for slot in CONFIG["slots"]:
+            hour, minute = map(int, slot["time_jst"].split(":"))
+            scheduled = datetime(2026, 10, 29, hour, minute, tzinfo=TZ)
+            if not (datetime(2026, 10, 29, 21, 50, tzinfo=TZ) <= scheduled
+                    <= datetime(2026, 10, 29, 23, 40, tzinfo=TZ)):
+                continue
+            created = scheduled + timedelta(minutes=3)
+            rkey = bsky_client.slot_record_key(scheduled.date(), scheduled.time(), TZ, slot["id"])
+            items.append({"post": {
+                "uri": f"at://did:plc:fake/app.bsky.feed.post/{rkey}",
+                "author": {"did": "did:plc:fake"},
+                "record": {"$type": "app.bsky.feed.post",
+                           "text": post_daily.render_slot(slot, scheduled),
+                           "createdAt": created.isoformat()}}})
+        self.assertEqual(len(items), 7)
+        result = self.assess([self.run_record()], {"feed": items})
+        self.assertIn("2026-10-29:greeting_night", result["expected_slots"])
+        self.assertEqual(len(result["expected_slots"]), 7)
         self.assertEqual(result["missing_slots"], [])
 
 

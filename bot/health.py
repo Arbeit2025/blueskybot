@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from bot.bsky_client import POST_COLLECTION, find_posted_uri, is_post_uri
+from bot.bsky_client import POST_COLLECTION, find_posted_uri, is_post_uri, slot_record_key
 from bot.post_daily import ROOT, render_slot
 
 
@@ -184,8 +184,14 @@ def assess(runs: dict, feed: dict, config: dict, operations: dict,
     for slot, scheduled, clock in expected:
         key = f"{scheduled.date().isoformat()}:{slot['id']}"
         result["expected_slots"].append(key)
+        # Identify the slot by its record key, not only by text and
+        # time window: with 15-minute slots the identical recruit /
+        # promo texts repeat 30 minutes apart, inside the window, so a
+        # neighbouring slot's post must not fulfil this slot.
+        own_rkey = slot_record_key(scheduled.date(), clock, tz, slot["id"])
         found = find_posted_uri(records, render_slot(slot, scheduled),
-                                slot_date=scheduled.date(), slot_time=clock, tz=tz)
+                                slot_date=scheduled.date(), slot_time=clock, tz=tz,
+                                own_rkey=own_rkey)
         if not found:
             result["missing_slots"].append(key)
     if result["missing_slots"]:

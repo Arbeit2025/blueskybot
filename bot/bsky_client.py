@@ -20,7 +20,13 @@ Posting is hardened against the failure modes of scheduled CI runs:
   time window today. A re-run in a fresh environment (where the local
   state file is gone) therefore does not post the same slot twice.
   The window (30 min before to 120 min after the slot time) keeps
-  apart slots that share an identical text hours apart.
+  apart slots that share an identical text hours apart. Since the
+  move to 15-minute slots, identical texts can repeat only 30 minutes
+  apart, well inside that window, so records carrying a slot record
+  key are identified by the key itself: a record whose key decodes
+  to a different slot's scheduled time never counts for this slot,
+  and this slot's own key counts even outside the window. Only
+  legacy records without a slot key are matched by the window.
   Failed lookups stop posting until a later scheduled run can verify
   the slot. Records are requested in the API's default order, which
   the live PDS returns newest first (verified 2026-10-29: passing
@@ -247,18 +253,52 @@ def build_post_record(text: str, facets: list[dict] | None = None,
     return record
 
 
+def _slot_key_timestamp_micros(rkey: object) -> int | None:
+    """Scheduled timestamp (microseconds) encoded in a slot record key.
+
+    Slot keys are TIDs built from the slot's scheduled time (exact to
+    the minute) plus hash bits from the slot ID. A key that decodes to
+    a minute-aligned timestamp is therefore one of this bot's slot
+    keys. Server-assigned TIDs encode the creation instant instead,
+    which is minute-aligned only by coincidence, and short legacy
+    keys do not decode at all; both return None here (not a slot key).
+    """
+    if not isinstance(rkey, str) or len(rkey) != 13:
+        return None
+    value = 0
+    for char in rkey:
+        digit = _TID_ALPHABET.find(char)
+        if digit < 0:
+            return None
+        value = value * 32 + digit
+    micros = value >> 10
+    if micros % 60_000_000 != 0:
+        return None
+    return micros
+
+
 def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
-                    slot_time: time, tz: ZoneInfo) -> str | None:
+                    slot_time: time, tz: ZoneInfo,
+                    own_rkey: str | None = None) -> str | None:
     """URI of an existing record for this slot, or None (pure).
 
-    A record counts as this slot's post when its text matches exactly,
-    its local time is inside the slot window (WINDOW_BEFORE before to WINDOW_AFTER
-    after the slot time). The window is what tells apart the two
-    daily slots that share an identical text (10:00 and 16:00).
+    A record counts as this slot's post when its text matches exactly
+    and its local time is inside the slot window (WINDOW_BEFORE before
+    to WINDOW_AFTER after the slot time). The window is what tells
+    apart slots that share an identical text hours apart, which was
+    enough when identical texts were hours apart.
+
+    With 15-minute slots, identical texts repeat 30 minutes apart, so
+    when `own_rkey` is given, key-carrying records are told apart by
+    the key instead: this slot's own key is an exact match regardless
+    of the window, and a record whose key belongs to a different
+    slot's scheduled time never counts for this slot. Records without
+    a slot key (legacy posts) keep the window rule.
     """
     slot_dt = datetime.combine(slot_date, slot_time, tzinfo=tz)
     window_start = slot_dt - WINDOW_BEFORE
     window_end = slot_dt + WINDOW_AFTER
+    slot_micros = int(slot_dt.timestamp()) * 1_000_000
     for item in records:
         if not isinstance(item, dict):
             continue
@@ -267,6 +307,14 @@ def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
             continue
         if value.get("text") != text:
             continue
+        if own_rkey is not None:
+            uri = item.get("uri")
+            rkey = uri[5:].split("/")[-1] if is_post_uri(uri) else None
+            if rkey == own_rkey:
+                return uri
+            key_micros = _slot_key_timestamp_micros(rkey)
+            if key_micros is not None and key_micros != slot_micros:
+                continue  # another slot's post; the window must not claim it
         created = value.get("createdAt")
         if not isinstance(created, str):
             continue
@@ -502,7 +550,7 @@ def create_post(text: str, handle: str, app_password: str,
             return None
         records = _list_recent_records(root, session, sleep=sleep)
         return find_posted_uri(records, text, slot_date=slot_date,
-                               slot_time=slot_time, tz=tz)
+                               slot_time=slot_time, tz=tz, own_rkey=rkey)
 
     # Periodic catch-up revisits the same slots. If the duplicate check
     # fails, leave the slot for a later run rather than posting blindly.

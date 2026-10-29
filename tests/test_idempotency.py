@@ -65,7 +65,7 @@ class IdempotencyTests(unittest.TestCase):
         for char in key:value=value*32+"234567abcdefghijklmnopqrstuvwxyz".index(char)
         self.assertEqual(value>>10,1793235600000000)
 
-    def test_nine_configured_slots_and_days_have_distinct_keys(self):
+    def test_all_configured_slots_and_days_have_distinct_keys(self):
         from bot.post_daily import load_config,ROOT
         config=load_config(ROOT/"config/post.json")
         keys=set()
@@ -73,7 +73,7 @@ class IdempotencyTests(unittest.TestCase):
             for slot in config["slots"]:
                 hour,minute=map(int,slot["time_jst"].split(":"))
                 keys.add(c.slot_record_key(date(2026,10,day),time(hour,minute),ZoneInfo("Asia/Tokyo"),slot["id"]))
-        self.assertEqual(len(keys),27)
+        self.assertEqual(len(keys),96*3)
 
     def test_fresh_client_reuses_one_server_record(self):
         store=Store()

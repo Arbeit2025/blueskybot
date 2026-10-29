@@ -2,9 +2,164 @@
   "timezone": "Asia/Tokyo",
   "slots": [
     {
+      "id": "extra_0000_recruit",
+      "time_jst": "00:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0015_promo",
+      "time_jst": "00:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0030_recruit",
+      "time_jst": "00:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0045_promo",
+      "time_jst": "00:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
       "id": "recruit_night",
       "time_jst": "01:00",
       "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0115_promo",
+      "time_jst": "01:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0130_recruit",
+      "time_jst": "01:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0145_promo",
+      "time_jst": "01:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0200_recruit",
+      "time_jst": "02:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0215_promo",
+      "time_jst": "02:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0230_recruit",
+      "time_jst": "02:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0245_promo",
+      "time_jst": "02:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0300_recruit",
+      "time_jst": "03:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0315_promo",
+      "time_jst": "03:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0330_recruit",
+      "time_jst": "03:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0345_promo",
+      "time_jst": "03:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0400_recruit",
+      "time_jst": "04:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0415_promo",
+      "time_jst": "04:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0430_recruit",
+      "time_jst": "04:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0445_promo",
+      "time_jst": "04:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0500_recruit",
+      "time_jst": "05:00",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0515_promo",
+      "time_jst": "05:15",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0530_recruit",
+      "time_jst": "05:30",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0545_promo",
+      "time_jst": "05:45",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0600_recruit",
+      "time_jst": "06:00",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0615_promo",
+      "time_jst": "06:15",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0630_recruit",
+      "time_jst": "06:30",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0645_promo",
+      "time_jst": "06:45",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0700_recruit",
+      "time_jst": "07:00",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0715_promo",
+      "time_jst": "07:15",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0730_recruit",
+      "time_jst": "07:30",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0745_promo",
+      "time_jst": "07:45",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "greeting_morning",
@@ -12,9 +167,39 @@
       "template": "おはよう！🔆\n今日も1日頑張ろう！"
     },
     {
+      "id": "extra_0815_recruit",
+      "time_jst": "08:15",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0830_promo",
+      "time_jst": "08:30",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0845_recruit",
+      "time_jst": "08:45",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
       "id": "recruit_morning",
       "time_jst": "09:00",
       "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0915_promo",
+      "time_jst": "09:15",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0930_recruit",
+      "time_jst": "09:30",
+      "template": "おはよう！🔆\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_0945_promo",
+      "time_jst": "09:45",
+      "template": "おはよう！🔆\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "promo_morning",
@@ -22,9 +207,119 @@
       "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
+      "id": "extra_1015_recruit",
+      "time_jst": "10:15",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1030_promo",
+      "time_jst": "10:30",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1045_recruit",
+      "time_jst": "10:45",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1100_promo",
+      "time_jst": "11:00",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1115_recruit",
+      "time_jst": "11:15",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1130_promo",
+      "time_jst": "11:30",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1145_recruit",
+      "time_jst": "11:45",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
       "id": "greeting_noon",
       "time_jst": "12:00",
       "template": "こんにちは！☀️\n今日も折り返し！頑張って！"
+    },
+    {
+      "id": "extra_1215_promo",
+      "time_jst": "12:15",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1230_recruit",
+      "time_jst": "12:30",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1245_promo",
+      "time_jst": "12:45",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1300_recruit",
+      "time_jst": "13:00",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1315_promo",
+      "time_jst": "13:15",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1330_recruit",
+      "time_jst": "13:30",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1345_promo",
+      "time_jst": "13:45",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1400_recruit",
+      "time_jst": "14:00",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1415_promo",
+      "time_jst": "14:15",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1430_recruit",
+      "time_jst": "14:30",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1445_promo",
+      "time_jst": "14:45",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1500_recruit",
+      "time_jst": "15:00",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1515_promo",
+      "time_jst": "15:15",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1530_recruit",
+      "time_jst": "15:30",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1545_promo",
+      "time_jst": "15:45",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "promo_afternoon",
@@ -32,9 +327,79 @@
       "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
+      "id": "extra_1615_recruit",
+      "time_jst": "16:15",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1630_promo",
+      "time_jst": "16:30",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1645_recruit",
+      "time_jst": "16:45",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1700_promo",
+      "time_jst": "17:00",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1715_recruit",
+      "time_jst": "17:15",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1730_promo",
+      "time_jst": "17:30",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1745_recruit",
+      "time_jst": "17:45",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1800_promo",
+      "time_jst": "18:00",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1815_recruit",
+      "time_jst": "18:15",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1830_promo",
+      "time_jst": "18:30",
+      "template": "こんにちは！☀️\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1845_recruit",
+      "time_jst": "18:45",
+      "template": "こんにちは！☀️\nサイトに載せるゲーム案募集中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
       "id": "greeting_evening",
       "time_jst": "19:00",
       "template": "こんばんは。🌙\n1日おつかれさま。\nゆっくり休んでね。"
+    },
+    {
+      "id": "extra_1915_promo",
+      "time_jst": "19:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1930_recruit",
+      "time_jst": "19:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_1945_promo",
+      "time_jst": "19:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
     },
     {
       "id": "recruit_evening",
@@ -42,9 +407,79 @@
       "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
     },
     {
+      "id": "extra_2015_promo",
+      "time_jst": "20:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2030_recruit",
+      "time_jst": "20:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2045_promo",
+      "time_jst": "20:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2100_recruit",
+      "time_jst": "21:00",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2115_promo",
+      "time_jst": "21:15",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2130_recruit",
+      "time_jst": "21:30",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2145_promo",
+      "time_jst": "21:45",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
       "id": "greeting_night",
       "time_jst": "22:00",
       "template": "おやすみ、また明日。💤"
+    },
+    {
+      "id": "extra_2215_recruit",
+      "time_jst": "22:15",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2230_promo",
+      "time_jst": "22:30",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2245_recruit",
+      "time_jst": "22:45",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2300_promo",
+      "time_jst": "23:00",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2315_recruit",
+      "time_jst": "23:15",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2330_promo",
+      "time_jst": "23:30",
+      "template": "こんばんは。🌙\nサイトにてミニゲーム開発中！\nhttps://minigame-b1qp.onrender.com/"
+    },
+    {
+      "id": "extra_2345_recruit",
+      "time_jst": "23:45",
+      "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
     }
   ]
 }
