@@ -22,7 +22,11 @@ Posting is hardened against the failure modes of scheduled CI runs:
   The window (30 min before to 120 min after the slot time) keeps
   apart slots that share an identical text hours apart.
   Failed lookups stop posting until a later scheduled run can verify
-  the slot, and records are requested newest first.
+  the slot. Records are requested in the API's default order, which
+  the live PDS returns newest first (verified 2026-10-29: passing
+  reverse=true returns OLDEST first, so it must not be sent), and the
+  cursor is followed for up to MAX_LIST_PAGES pages so the recent
+  posts stay reachable even after the account has many posts.
 - Response validation: a createRecord response only counts as a
   success when it carries a well-formed uri (at://...) and cid. A
   malformed "success" is verified against the repo before being
@@ -56,6 +60,7 @@ from zoneinfo import ZoneInfo
 DEFAULT_PDS_URL = "https://bsky.social"
 POST_COLLECTION = "app.bsky.feed.post"
 MAX_ATTEMPTS = 3
+MAX_LIST_PAGES = 3
 WINDOW_BEFORE = timedelta(minutes=30)
 WINDOW_AFTER = timedelta(minutes=120)
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -290,27 +295,13 @@ def create_session(handle: str, app_password: str, base: str | None = None,
     return session
 
 
-def _list_recent_records(root: str, session: dict, *, limit: int = 100,
-                         sleep=time_module.sleep) -> list[dict]:
-    query = urllib.parse.urlencode({
-        "repo": session["did"],
-        "collection": POST_COLLECTION,
-        "limit": limit,
-        "reverse": "true",
-    })
-    result = _with_retry(
-        lambda: _get_json(
-            f"{root}/xrpc/com.atproto.repo.listRecords?{query}",
-            token=session["accessJwt"],
-        ),
-        sleep=sleep,
-    )
+def _validate_record_page(result: dict, did: str) -> list[dict]:
     records = result.get("records")
     if not isinstance(records, list):
         raise BskyError("listRecords returned a malformed response")
     for item in records:
         value = item.get("value") if isinstance(item, dict) else None
-        if not isinstance(value, dict) or not is_post_uri(item.get("uri"), session["did"]) \
+        if not isinstance(value, dict) or not is_post_uri(item.get("uri"), did) \
                 or value.get("$type") != POST_COLLECTION or not isinstance(value.get("text"), str) \
                 or not isinstance(value.get("createdAt"), str):
             raise BskyError("listRecords contains a malformed post record")
@@ -321,6 +312,47 @@ def _list_recent_records(root: str, session: dict, *, limit: int = 100,
         except ValueError as exc:
             raise BskyError("listRecords contains an invalid post timestamp") from exc
     return records
+
+
+def _list_recent_records(root: str, session: dict, *, limit: int = 100,
+                         sleep=time_module.sleep) -> list[dict]:
+    """Recent posts, newest first, following the pagination cursor.
+
+    The API's default order is newest first. Do NOT send reverse=true:
+    on the real PDS that returns the OLDEST records first, so with
+    limit=100 the duplicate check would silently stop seeing today's
+    posts once the account has more than 100 posts in total. Pages are
+    followed for up to MAX_LIST_PAGES pages (300 records, about a
+    month of this bot's posts) which is far beyond the 2.5-hour
+    duplicate-check window.
+    """
+    collected: list[dict] = []
+    cursor: str | None = None
+    for _page in range(MAX_LIST_PAGES):
+        params = {
+            "repo": session["did"],
+            "collection": POST_COLLECTION,
+            "limit": limit,
+        }
+        if cursor is not None:
+            params["cursor"] = cursor
+        query = urllib.parse.urlencode(params)
+        result = _with_retry(
+            lambda: _get_json(
+                f"{root}/xrpc/com.atproto.repo.listRecords?{query}",
+                token=session["accessJwt"],
+            ),
+            sleep=sleep,
+        )
+        page = _validate_record_page(result, session["did"])
+        collected.extend(page)
+        cursor = result.get("cursor")
+        if cursor is None:
+            break
+        if not isinstance(cursor, str) or not cursor or len(cursor) > 512 \
+                or not page:
+            raise BskyError("listRecords returned a malformed cursor")
+    return collected
 
 
 def _validate_created(result: dict, expected_did: str | None = None,

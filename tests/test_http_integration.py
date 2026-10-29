@@ -66,7 +66,9 @@ class HttpIntegrationTests(unittest.TestCase):
                     else:self.reject()
                     return
                 test.assertTrue(parsed.path.endswith("listRecords"))
-                test.assertEqual(parse_qs(parsed.query)["reverse"], ["true"])
+                # Newest-first is the API default; reverse=true would
+                # return the oldest records first on the real PDS.
+                test.assertNotIn("reverse", parse_qs(parsed.query))
                 self.respond({"records": records[:100]})
 
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

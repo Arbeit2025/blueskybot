@@ -176,7 +176,11 @@ class CreatePostTests(unittest.TestCase):
         self.fake.create_outcomes = [{"uri": GOOD_URI, "cid": "cid1"}]
         with mock.patch.object(bsky_client, "_request_json", capture):
             self.post()
-        self.assertEqual(seen[0]["reverse"], ["true"])
+        # Default API order is newest first. reverse=true must NOT be
+        # sent: on the real PDS it returns the OLDEST records first
+        # (verified live 2026-10-29), which would hide today's posts
+        # from the duplicate check once the account has >100 posts.
+        self.assertNotIn("reverse", seen[0])
         self.assertEqual(seen[0]["limit"], ["100"])
 
     def test_failed_duplicate_check_never_posts_blindly(self):
