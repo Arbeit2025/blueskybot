@@ -147,6 +147,103 @@
   未取得）。実投稿を伴う検証は行っていない（dry-run とスタブ、
   ローカルHTTP統合テストまで）
 - 残課題: (1) ChatGPT側 Cycle 1〜5 と 2d024ca3 のミニ開発記録が未作成
+  → 2026-10-29 に下記「補記」で対応済み
   (2) 文面に空白なしで日本語が続くURLは句読点位置でのみ切断でき、
   句読点なしで地の文が続く場合は判別できない（文面作成時の注意として
   残る） (3) 19:00以降の各枠が新コードで正常投稿されるかの継続確認
+  → 確認チェックを設定済み（結果は追記する）
+
+---
+
+## 補記（2026-10-29）: ChatGPT側のスケジュール修正・fallback・Cycle 1〜5
+
+本節は、担当した ChatGPT 自身の報告ではなく、ユーザーの指示により
+Meta Muse が後から補記したものである。根拠は GitHub のコミット履歴、
+各コミットの変更ファイル一覧、および Muse による読み戻し検証
+（e2225b85 時点で全ファイルを取得し、単体テスト147件を3回実行して
+全て成功、公開APIで実投稿を確認）。ChatGPT 側の作業中の思考過程や
+未コミットの検証は記録できないため、ここに書けるのはコミットとして
+残った事実と Muse の検証結果だけである。
+
+- 担当AI: ChatGPT（補記: Meta Muse）
+- 対象: Arbeit2025/blueskybot / main
+
+### b5085084（10:15 JST）スケジュール修正
+
+- 内容: cron を毎時0分×9本から 10分間隔の tick＋`--due` 追いつき方式
+  （予定から2時間以内を回収）へ変更し、重複チェックを安全側へ
+- 主な変更ファイル: .github/workflows/daily-post.yml、bot/post_daily.py、
+  bot/bsky_client.py ほか
+- Muse の検証: コミット存在と内容の要旨を履歴で確認。当時は tick の
+  実行が履歴に現れず、定時実行の成否は次の 2d024ca3 以降で改善された
+
+### 2d024ca3（15:01 JST）外部hourly fallback・独立監視・明示的な投稿結果
+
+- 内容: GitHub の schedule が起動しない事態に備え、ChatGPT の毎時
+  タスクが運用 Issue #2 を編集して daily-post を起動する外部 fallback
+  を追加（Issue本文は命令として扱わない設計）。読み取り専用の監視
+  bot/health と本番接続確認 bot/check_access、実行結果を成功・
+  投稿済み・対象なし・停止・エラー等に区別する BOT_REPORT_JSON
+  （bot/reporting）と、イベント選択を担う bot/runner を追加
+- 変更ファイル: .github/workflows/check-access.yml、
+  .github/workflows/daily-post.yml、README.md、bot/check_access.py、
+  bot/health.py、bot/post_daily.py、bot/reporting.py、bot/runner.py、
+  config/operations.json、docs/design.md、docs/install.md、
+  docs/operations.md、docs/watchdog-task.md、
+  tests/test_http_integration.py、tests/test_operations.py
+- 実効果（Muse 確認）: 同日16:06:54 JST に promo_afternoon が
+  自動投稿された（通常枠の自動投稿として初）
+
+### Cycle 1（339942c6、15:27 JST）状態ファイルの破損拒否と原子的保存
+
+- 内容: 状態JSONは「不存在」だけを初回状態とし、破損・型違いは
+  StateError で投稿前に停止。保存は同一ディレクトリの一時ファイルへ
+  書き込み・flush・fsync 後に置換し、置換前の失敗では元の状態を保持。
+  投稿前に保存先へ書けることも事前確認する
+- 変更ファイル: bot/state.py、bot/post_daily.py、docs/operations.md、
+  tests/test_state_recovery.py（新規）
+
+### Cycle 2（60138cfe、15:33 JST）全スロット検証と不正イベントの拒否
+
+- 内容: 設定の全スロットを実行前に検証（ID・時刻の一意性と形式、
+  テンプレートの置換は許可された名前だけ、展開後に空・300字超は
+  停止）。外部イベント（Issue編集）のペイロードも送信者・対象・
+  変更箇所まで検証し、不正なものは投稿経路に入れない
+- 主な変更ファイル: bot/post_daily.py、bot/template.py、bot/runner.py、
+  tests/test_configuration.py（新規）
+
+### Cycle 3（30de2407、15:41 JST）API応答の所有者と形式の検証
+
+- 内容: セッション・listRecords・getRecord・createRecord の応答を
+  形式と所有者（DID）まで検証し、不正な応答を成功と扱わない。
+  応答サイズ上限やエラーコードの抽出も含む
+- 主な変更ファイル: bot/bsky_client.py、tests/test_api_responses.py
+  （新規）
+
+### Cycle 4（f135b803、15:52 JST）安定レコードキーと並行・不確実投稿の照合
+
+- 内容: スロットごとに決定的なレコードキー（TID）を割り当て、
+  getRecord で直接照合できるようにした。並行実行や応答喪失で
+  「投稿されたか分からない」場合はキーで再照合し、キーが別の
+  文面で埋まっていたら上書きせず競合として停止する
+- 主な変更ファイル: bot/bsky_client.py、bot/post_daily.py、
+  tests/test_idempotency.py（新規）、tests/test_scheduling.py（新規）
+
+### Cycle 5（e2225b85、16:04 JST）実行状態・フィード所有者・監視報告の検証
+
+- 内容: 監視 bot/health が、実行レポートの整合性（結果と集計の一致、
+  鮮度、未知の状態の混入）、workflow run の実開始時刻と滞留、
+  著者フィードの所有者（expected_did と author・URI の DID 一致）を
+  検証するよう強化。queued を起動済みに数えない等
+- 変更ファイル: bot/health.py、config/operations.json、
+  docs/operations.md、docs/watchdog-task.md、
+  tests/test_health_integrity.py（新規）、tests/test_operations.py
+
+### Muse による検証結果（補記の根拠）
+
+- e2225b85 時点の全33ファイル相当を読み戻し、ローカルで単体テスト
+  147件を3回実行して全て成功
+- 公開APIで実投稿を確認: 09:08 JST の手動テスト「test」と
+  16:06:54 JST の promo_afternoon（投稿総数2件）
+- 本補記の push 時点で main はその後の Muse サイクル M1〜M5 を含む
+  03ea3bf7 まで進んでいる
