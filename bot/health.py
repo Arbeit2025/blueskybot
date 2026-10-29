@@ -35,7 +35,7 @@ def validate_execution(execution: dict, now: datetime, maximum_age: int) -> None
             or dict(Counter(x["status"] for x in outcomes)) != counts:
         raise ValueError("execution report outcomes and counts are inconsistent")
     known = {"posted","already_posted","no_due","disabled","configuration_error","missing_credentials",
-             "authentication_error","api_error","state_write_error","state_read_error","state_preflight_error","validation_error"}
+             "authentication_error","api_error","state_write_error","state_read_error","state_preflight_error","validation_error","internal_error"}
     if not set(counts).issubset(known):
         raise ValueError("execution report is not a recognized posting outcome")
     if execution.get("source") not in ("schedule", "issues") or execution.get("mode") not in ("post", "event_gate"):

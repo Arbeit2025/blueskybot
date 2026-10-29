@@ -135,7 +135,9 @@ def build_link_facets(text: str) -> list[dict]:
         )
         char_pos = match.end()
         byte_pos = byte_start + len(match.group(0).encode("utf-8"))
-    # Reference to `encoded` documents the byte basis; offsets above are
-    # computed incrementally and match len(encoded) slicing.
-    assert facets == [] or facets[-1]["index"]["byteEnd"] <= len(encoded)
+    # Offsets above are computed incrementally on the UTF-8 encoding;
+    # verify the invariant explicitly instead of asserting it, so a
+    # violation surfaces as a handled error, not a bare AssertionError.
+    if facets and facets[-1]["index"]["byteEnd"] > len(encoded):
+        raise ValueError("link facet byte range exceeds the post text")
     return facets

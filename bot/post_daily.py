@@ -263,10 +263,24 @@ def main(argv: list[str] | None = None) -> int:
     if not selected:
         return finish(0, "no_due", "no slot is due in the last 2 hours")
     for slot, scheduled_at in selected:
-        # A failed slot must not stop other due slots from being handled.
-        status = max(status, run_slot(slot, config, scheduled_at,
-                                     Path(args.state), post=args.post, outcomes=report["outcomes"],
-                                     expected_did=expected_did))
+        # A failed slot must not stop other due slots from being handled:
+        # run_slot returns error codes for expected failures, and an
+        # unexpected exception is isolated here as internal_error so it
+        # can neither skip the remaining slots nor lose the report.
+        try:
+            code = run_slot(slot, config, scheduled_at,
+                            Path(args.state), post=args.post, outcomes=report["outcomes"],
+                            expected_did=expected_did)
+        except Exception as exc:
+            print(f"error: unexpected failure in slot {slot['id']}: {exc}")
+            report["outcomes"].append({
+                "slot_id": slot["id"],
+                "scheduled_at": scheduled_at.isoformat(),
+                "status": "internal_error",
+                "detail": str(exc),
+            })
+            code = 1
+        status = max(status, code)
     return finish(status)
 
 
