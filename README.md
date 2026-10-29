@@ -4,6 +4,9 @@ Bluesky へ、決まった内容を1日9回、自動で投稿するための Bot
 もともと X 向けに作ったスターターキット（ローカル `xbot`）を、
 Bluesky（AT Protocol）向けに作り替えたもの。
 
+投稿先アカウント:
+[@arbeit2025.bsky.social](https://bsky.app/profile/arbeit2025.bsky.social)
+
 ## 1日の投稿（全て JST）
 
 | 時刻 | 種別 | 内容 |
