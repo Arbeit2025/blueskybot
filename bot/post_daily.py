@@ -111,15 +111,30 @@ def main(argv: list[str] | None = None) -> int:
         print("refused: missing credentials in environment: " + ", ".join(missing))
         return 1
 
-    from bot.bsky_client import create_post
+    from bot.bsky_client import BskyError, create_post
 
-    result = create_post(
-        text,
-        os.environ["BLUESKY_HANDLE"],
-        os.environ["BLUESKY_APP_PASSWORD"],
-        facets=build_link_facets(text),
-    )
+    slot_time = datetime.strptime(slot["time_jst"], "%H:%M").time()
+    try:
+        result = create_post(
+            text,
+            os.environ["BLUESKY_HANDLE"],
+            os.environ["BLUESKY_APP_PASSWORD"],
+            facets=build_link_facets(text),
+            slot_date=now.date(),
+            slot_time=slot_time,
+            tz_name=config.get("timezone", "Asia/Tokyo"),
+        )
+    except BskyError as exc:
+        print(f"error: post failed: {exc}")
+        return 1
+    if result.get("precheck_failed"):
+        print("warning: the server-side duplicate check could not be "
+              "completed before posting")
     record_post_slot(state_path, state, date_str, slot["id"], text)
+    if result.get("already_posted"):
+        print(f"skip: this slot was already posted (server check): "
+              f"uri={result.get('uri')}")
+        return 0
     print(f"posted: uri={result.get('uri')}")
     return 0
 
