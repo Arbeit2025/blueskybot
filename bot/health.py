@@ -24,6 +24,41 @@ def parse_time(value: str) -> datetime:
     return moment.astimezone(timezone.utc)
 
 
+def _is_usable_automatic_run(run: object) -> bool:
+    """A workflow-run entry the assessment can safely reason about.
+
+    The runs list comes from the GitHub API via the watchdog's tooling;
+    one malformed entry (not an object, missing id, unparseable
+    timestamps) must not turn the whole health check "unknown" and
+    blind the watchdog. Entries that cannot be interpreted are
+    excluded here; entries that merely look inactive (queued, skipped)
+    keep flowing through the existing filters and stale detection.
+    """
+    if not isinstance(run, dict):
+        return False
+    if run.get("path") != ".github/workflows/daily-post.yml":
+        return False
+    if run.get("event") not in ("schedule", "issues"):
+        return False
+    if run.get("status") not in ("completed", "in_progress"):
+        return False
+    if run.get("conclusion") in ("skipped", "cancelled"):
+        return False
+    if type(run.get("id")) is not int:
+        return False
+    for key in ("created_at", "run_started_at"):
+        value = run.get(key)
+        if value is None:
+            if key == "created_at":
+                return False
+            continue
+        try:
+            parse_time(value)
+        except (TypeError, ValueError, AttributeError):
+            return False
+    return True
+
+
 def validate_execution(execution: dict, now: datetime, maximum_age: int) -> None:
     if not isinstance(execution, dict) or type(execution.get("exit_code")) is not int \
             or execution["exit_code"] not in (0, 1):
@@ -81,10 +116,7 @@ def assess(runs: dict, feed: dict, config: dict, operations: dict,
             result["problems"].append("execution_failed")
 
     automatic = [run for run in runs["workflow_runs"]
-                 if run.get("path") == ".github/workflows/daily-post.yml"
-                 and run.get("event") in ("schedule", "issues")
-                 and run.get("status") in ("completed", "in_progress")
-                 and run.get("conclusion") not in ("skipped", "cancelled")]
+                 if _is_usable_automatic_run(run)]
     def started_at(run):
         return parse_time(run.get("run_started_at") or run["created_at"])
     def latest(event):
