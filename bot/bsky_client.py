@@ -60,6 +60,7 @@ import hashlib
 import os
 import re
 import time as time_module
+from email.utils import parsedate_to_datetime
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -92,11 +93,15 @@ class BskyError(Exception):
         self.retry_after = retry_after
 
 
-def _parse_retry_after(headers) -> float | None:
-    """Retry-After delta-seconds from response headers, capped.
+def _parse_retry_after(headers, now: datetime | None = None) -> float | None:
+    """Retry-After from response headers, capped.
 
-    HTTP-date values and malformed values return None (plain backoff
-    is used instead). The cap keeps one bad hint from stalling a run.
+    Both RFC forms are honored: delta-seconds and HTTP-date. The date
+    form matters because intermediaries (e.g. a CDN in front of the
+    PDS) may rewrite the header; ignoring it used to burn all retries
+    inside the rate-limit window. Past dates mean "retry now" (0.0);
+    malformed values return None (plain backoff is used instead). The
+    cap keeps one bad hint from stalling a run.
     """
     try:
         raw = headers.get("Retry-After") if headers is not None else None
@@ -104,13 +109,26 @@ def _parse_retry_after(headers) -> float | None:
         return None
     if raw is None:
         return None
+    raw = str(raw).strip()
     try:
-        seconds = float(str(raw).strip())
+        seconds = float(raw)
     except ValueError:
+        seconds = None
+    if seconds is not None:
+        if seconds < 0:
+            return None
+        return min(seconds, RETRY_AFTER_CAP_SECONDS)
+    try:
+        target = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
         return None
-    if seconds < 0:
+    if target is None or target.tzinfo is None:
         return None
-    return min(seconds, RETRY_AFTER_CAP_SECONDS)
+    reference = now if now is not None else datetime.now(timezone.utc)
+    delta = (target - reference).total_seconds()
+    if delta <= 0:
+        return 0.0
+    return min(delta, RETRY_AFTER_CAP_SECONDS)
 
 
 def _retry_delay(attempt_index: int, error: BskyError | None,
