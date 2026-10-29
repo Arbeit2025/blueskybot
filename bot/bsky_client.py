@@ -35,7 +35,10 @@ Posting is hardened against the failure modes of scheduled CI runs:
   retried up to 3 attempts with backoff. Before every retry the repo
   is re-checked, because the previous attempt may have landed even
   though its response was lost. Client errors (other HTTP 4xx) fail
-  immediately.
+  immediately. When the server sends a Retry-After hint (delta
+  seconds) on an error response, the wait is at least that long,
+  capped at RETRY_AFTER_CAP_SECONDS so a bad or extreme hint cannot
+  stall a scheduled run past its workflow timeout.
 
 The PDS base URL defaults to https://bsky.social and can be overridden
 with BLUESKY_PDS_URL for accounts hosted on another PDS.
@@ -61,6 +64,7 @@ DEFAULT_PDS_URL = "https://bsky.social"
 POST_COLLECTION = "app.bsky.feed.post"
 MAX_ATTEMPTS = 3
 MAX_LIST_PAGES = 3
+RETRY_AFTER_CAP_SECONDS = 30.0
 WINDOW_BEFORE = timedelta(minutes=30)
 WINDOW_AFTER = timedelta(minutes=120)
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -73,11 +77,44 @@ class BskyError(Exception):
     """Bluesky request failure. `transient` marks errors worth retrying."""
 
     def __init__(self, message: str, *, status: int | None = None,
-                 transient: bool = False, error_code: str | None = None):
+                 transient: bool = False, error_code: str | None = None,
+                 retry_after: float | None = None):
         super().__init__(message)
         self.status = status
         self.transient = transient
         self.error_code = error_code
+        self.retry_after = retry_after
+
+
+def _parse_retry_after(headers) -> float | None:
+    """Retry-After delta-seconds from response headers, capped.
+
+    HTTP-date values and malformed values return None (plain backoff
+    is used instead). The cap keeps one bad hint from stalling a run.
+    """
+    try:
+        raw = headers.get("Retry-After") if headers is not None else None
+    except AttributeError:
+        return None
+    if raw is None:
+        return None
+    try:
+        seconds = float(str(raw).strip())
+    except ValueError:
+        return None
+    if seconds < 0:
+        return None
+    return min(seconds, RETRY_AFTER_CAP_SECONDS)
+
+
+def _retry_delay(attempt_index: int, error: BskyError | None,
+                 base_delay: float = 1.0) -> float:
+    """Backoff for the wait after attempt `attempt_index` (0-based)."""
+    delay = base_delay * (2 ** attempt_index)
+    hint = getattr(error, "retry_after", None) if error is not None else None
+    if hint is not None:
+        delay = max(delay, min(hint, RETRY_AFTER_CAP_SECONDS))
+    return delay
 
 
 def is_post_uri(uri: object, expected_did: str | None = None,
@@ -223,6 +260,7 @@ def _request_json(method: str, url: str, payload: dict | None = None,
             raise BskyError("API response is not valid UTF-8") from exc
     except urllib.error.HTTPError as exc:
         error_code = None
+        retry_after = _parse_retry_after(getattr(exc, "headers", None))
         try:
             error_body = json.loads(exc.read(4096).decode("utf-8"))
             candidate = error_body.get("error") if isinstance(error_body, dict) else None
@@ -237,6 +275,7 @@ def _request_json(method: str, url: str, payload: dict | None = None,
             status=exc.code,
             transient=_is_transient_status(exc.code),
             error_code=error_code,
+            retry_after=retry_after,
         ) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise BskyError(f"network error for {url}: {exc}",
@@ -272,7 +311,7 @@ def _with_retry(fn, *, attempts: int = MAX_ATTEMPTS, base_delay: float = 1.0,
                 raise
             last_error = exc
             if attempt < attempts - 1:
-                sleep(base_delay * (2 ** attempt))
+                sleep(_retry_delay(attempt, exc, base_delay))
     assert last_error is not None
     raise last_error
 
@@ -425,7 +464,7 @@ def create_post(text: str, handle: str, app_password: str,
             found = check_existing()
             if found:
                 return {"uri": found, "already_posted": True}
-            sleep(1.0 * (2 ** (attempt - 1)))
+            sleep(_retry_delay(attempt - 1, last_error))
         try:
             result = _post_json(
                 f"{root}/xrpc/com.atproto.repo.createRecord",
