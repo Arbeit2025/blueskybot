@@ -33,6 +33,8 @@ daily-postの各実行で、ActionsのSummary、ログの`BOT_REPORT_JSON=`、7�
 | missing_credentials | 必要なSecretsが未設定 |
 | authentication_error | APIの401・403 |
 | api_error | API・通信・照合の失敗 |
+| state_read_error | 状態の破損・型違い・読込失敗。投稿前に停止 |
+| state_preflight_error | 投稿前の状態保存先チェックに失敗。投稿せず停止 |
 | state_write_error | 投稿は存在するが、補助状態の保存に失敗。再実行はサーバー照合が必要 |
 | ignored_event | 許可されていない外部イベント |
 
@@ -60,3 +62,5 @@ python -m bot.health --runs-json runs.json --feed-json feed.json \
 - unknown：取得や判定に失敗し、確認不能。
 
 投稿成功とテスト成功、外部起動成功と通常予約の復旧は、それぞれ区別して運用記録へ残す。
+
+状態JSONは不存在だけを初回状態とし、破損や読込失敗は空に置き換えない。送信前に保存先へ一時ファイルを作れることを確認し、保存は同じディレクトリの一時ファイルへ書込・flush・fsync後に置換する。置換前の失敗では元の状態を保持する。投稿後に新しいI/O障害が起きる可能性は残るため、サーバー側の照合も引き続き必要。

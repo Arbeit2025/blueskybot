@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from bot.state import already_posted_slot, load_state, record_post_slot  # noqa: E402
+from bot.state import StateError, already_posted_slot, load_state, prepare_state_path, record_post_slot  # noqa: E402
 from bot.template import build_link_facets, render_template, validate_post  # noqa: E402
 from bot.reporting import finish_report, new_report  # noqa: E402
 
@@ -86,7 +86,11 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
         print("validation failed: " + "; ".join(problems))
         return outcome("validation_error", 1, detail="; ".join(problems))
 
-    state = load_state(state_path)
+    try:
+        state = load_state(state_path)
+    except StateError as exc:
+        print(f"error: {exc}")
+        return outcome("state_read_error", 1, detail=str(exc))
     if already_posted_slot(state, date_str, slot["id"]):
         print("skip: this slot was already posted for its scheduled date (state file)")
         return outcome("already_posted", detail="local state")
@@ -101,6 +105,12 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
     if missing:
         print("refused: missing credentials in environment: " + ", ".join(missing))
         return outcome("missing_credentials", 1, detail=", ".join(missing))
+
+    try:
+        prepare_state_path(state_path)
+    except StateError as exc:
+        print(f"error: {exc}; nothing posted")
+        return outcome("state_preflight_error", 1, detail=str(exc))
 
     from bot.bsky_client import BskyError, create_post
 
