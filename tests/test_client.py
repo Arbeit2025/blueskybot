@@ -6,6 +6,7 @@ createSession / listRecords / createRecord.
 """
 import sys
 import unittest
+import urllib.parse
 from datetime import date, time
 from pathlib import Path
 from unittest import mock
@@ -166,6 +167,49 @@ class CreatePostTests(unittest.TestCase):
         self.assertEqual(result["uri"], GOOD_URI)
         self.assertEqual(self.fake.calls["session"], 2)
 
+    def test_recent_records_are_requested_newest_first(self):
+        seen = []
+        def capture(method, url, payload=None, token=None):
+            if "listRecords" in url:
+                seen.append(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query))
+            return self.fake(method, url, payload, token)
+        self.fake.create_outcomes = [{"uri": GOOD_URI, "cid": "cid1"}]
+        with mock.patch.object(bsky_client, "_request_json", capture):
+            self.post()
+        self.assertEqual(seen[0]["reverse"], ["true"])
+        self.assertEqual(seen[0]["limit"], ["100"])
+
+    def test_failed_duplicate_check_never_posts_blindly(self):
+        def unavailable(method, url, payload=None, token=None):
+            if "listRecords" in url:
+                raise BskyError("HTTP 503", status=503, transient=True)
+            return self.fake(method, url, payload, token)
+        with mock.patch.object(bsky_client, "_request_json", unavailable):
+            with self.assertRaises(BskyError):
+                self.post()
+        self.assertEqual(self.fake.calls["create"], 0)
+
+    def test_malformed_duplicate_response_never_posts(self):
+        def malformed(method, url, payload=None, token=None):
+            if "listRecords" in url:
+                return {"records": None}
+            return self.fake(method, url, payload, token)
+        with mock.patch.object(bsky_client, "_request_json", malformed):
+            with self.assertRaises(BskyError):
+                self.post()
+        self.assertEqual(self.fake.calls["create"], 0)
+
+    def test_failed_recheck_never_repeats_an_uncertain_post(self):
+        def unavailable_after_create(method, url, payload=None, token=None):
+            if "listRecords" in url and self.fake.calls["create"]:
+                raise BskyError("duplicate lookup unavailable")
+            return self.fake(method, url, payload, token)
+        self.fake.create_outcomes = [BskyError("response lost", transient=True)]
+        with mock.patch.object(bsky_client, "_request_json", unavailable_after_create):
+            with self.assertRaises(BskyError):
+                self.post()
+        self.assertEqual(self.fake.calls["create"], 1)
+
 
 class FindPostedUriTests(unittest.TestCase):
     def find(self, records, slot_time):
@@ -186,6 +230,10 @@ class FindPostedUriTests(unittest.TestCase):
     def test_other_text_ignored(self):
         rec = [make_record("別の文面", "2026-10-29T01:05:00.000Z")]
         self.assertIsNone(self.find(rec, time(10, 0)))
+
+    def test_late_post_after_midnight_matches_previous_days_slot(self):
+        rec = [make_record(TEXT, "2026-10-29T15:00:00Z")]
+        self.assertIsNotNone(self.find(rec, time(22, 0)))
 
 
 if __name__ == "__main__":

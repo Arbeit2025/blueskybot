@@ -7,7 +7,7 @@ Bluesky（AT Protocol）向けに作り替えたもの。
 投稿先アカウント:
 [@arbeit2025.bsky.social](https://bsky.app/profile/arbeit2025.bsky.social)
 
-## 1日の投稿（全て JST）
+## 1日の投稿（予定時刻、全て JST）
 
 | 時刻 | 種別 | 内容 |
 |---|---|---|
@@ -20,6 +20,12 @@ Bluesky（AT Protocol）向けに作り替えたもの。
 | 19:00 | 挨拶 | こんばんは |
 | 20:00 | 募集 | こんばんは＋ゲーム案募集＋ミニゲーム集URL |
 | 22:00 | 挨拶 | おやすみ |
+
+定期起動は毎時07・17・27・37・47・57分。通常は上の予定時刻の
+約7分後に投稿するが、GitHub Actions の混雑でさらに遅れる場合がある。
+毎回、予定時刻から2時間以内の未投稿枠を古い順に確認するため、
+起動を1回取りこぼしても次の起動で回収できる。予定前の枠と、
+2時間を超えた古い枠は投稿しない。時刻ぴったりの実行は保証しない。
 
 スロットの定義と文面は `config/post.json` の `slots` に集約してある。
 文面は 2026-10-29 にユーザーが指定した固定文（プレースホルダなし）。
@@ -34,7 +40,7 @@ Bluesky（AT Protocol）向けに作り替えたもの。
   事実上関係ない。
 - **文面はユーザー指定の固定文。** プレースホルダ（`{date_ja}` 等）
   の仕組みは残してあるが、現在の文面では使っていない。
-- **dry-run が既定。** 実際に投稿するのは `--post` ＋ `--slot` ＋
+- **dry-run が既定。** 実際に投稿するのは `--post` ＋ `--slot` または `--due` ＋
   環境変数 `POST_ENABLED=true` ＋ 認証情報2点（ハンドル／
   アプリパスワード）が全部揃ったときだけ。
 - **重複投稿の防止はサーバー側でも確認する。** 投稿前に自分の
@@ -42,7 +48,8 @@ Bluesky（AT Protocol）向けに作り替えたもの。
   （開始30分前〜2時間後）に今日すでにあれば投稿しない。Actions の
   状態ファイルは実行環境ごとに消えるため、この照合が本命の
   ガードで、状態ファイルは補助。文面が同じ宣伝枠（10:00／16:00）は
-  時間帯で区別する。
+  時間帯で区別する。最新100件を新しい順で取得し、照合に失敗した
+  場合は送信を止めて次の起動を待つ。Actions の投稿ジョブは直列化する。
 - **成功応答は検証する。** 投稿 API の応答に正しい形式の uri と
   cid が含まれている場合だけ成功と扱う。形式が不正な応答は、
   実際に投稿が保存されているかを照合してから成否を決める。
@@ -61,6 +68,7 @@ Bluesky（AT Protocol）向けに作り替えたもの。
 python -m unittest discover -s tests -v   # テスト
 python -m bot.post_daily                  # dry-run：全9スロットの文面を表示
 python -m bot.post_daily --slot promo_morning   # dry-run：1スロットだけ
+python -m bot.post_daily --due             # dry-run：直近2時間の枠だけ
 ```
 
 ## 設定
@@ -68,8 +76,9 @@ python -m bot.post_daily --slot promo_morning   # dry-run：1スロットだけ
 - 文面と時刻： `config/post.json` の `slots`（各スロットに
   `id` / `time_jst` / `template`。使える置換： `{date}` /
   `{date_ja}` / `{weekday_ja}` / `{slot_time}`、上限300字）
-- 投稿時刻： `.github/workflows/daily-post.yml` の cron 9本
-  （UTC表記。cron文字列とスロットの対応は同ファイル内に記載）
+- 投稿の予定時刻： `config/post.json` の `time_jst`
+- 起動間隔： `.github/workflows/daily-post.yml` の cron
+  （毎時07・17・27・37・47・57分に `--due` を実行）
 - 認証情報： `.env.example` を参照。実値は GitHub Secrets /
   ローカル `.env` のみに置き、リポジトリへ入れない。
   パスワードは本体パスワードではなく **アプリパスワード** を使う。

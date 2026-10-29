@@ -21,6 +21,8 @@ Posting is hardened against the failure modes of scheduled CI runs:
   state file is gone) therefore does not post the same slot twice.
   The window (30 min before to 120 min after the slot time) keeps
   apart slots that share an identical text hours apart.
+  Failed lookups stop posting until a later scheduled run can verify
+  the slot, and records are requested newest first.
 - Response validation: a createRecord response only counts as a
   success when it carries a well-formed uri (at://...) and cid. A
   malformed "success" is verified against the repo before being
@@ -97,8 +99,7 @@ def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
     """URI of an existing record for this slot, or None (pure).
 
     A record counts as this slot's post when its text matches exactly,
-    its createdAt falls on `slot_date` in `tz`, and its local time is
-    inside the slot window (WINDOW_BEFORE before to WINDOW_AFTER
+    its local time is inside the slot window (WINDOW_BEFORE before to WINDOW_AFTER
     after the slot time). The window is what tells apart the two
     daily slots that share an identical text (10:00 and 16:00).
     """
@@ -119,8 +120,6 @@ def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
         if moment.tzinfo is None:
             continue
         local = moment.astimezone(tz)
-        if local.date() != slot_date:
-            continue
         if window_start <= local <= window_end:
             uri = item.get("uri")
             if isinstance(uri, str) and uri:
@@ -205,12 +204,13 @@ def create_session(handle: str, app_password: str, base: str | None = None,
     return session
 
 
-def _list_recent_records(root: str, session: dict, *, limit: int = 30,
+def _list_recent_records(root: str, session: dict, *, limit: int = 100,
                          sleep=time_module.sleep) -> list[dict]:
     query = urllib.parse.urlencode({
         "repo": session["did"],
         "collection": POST_COLLECTION,
         "limit": limit,
+        "reverse": "true",
     })
     result = _with_retry(
         lambda: _get_json(
@@ -220,7 +220,9 @@ def _list_recent_records(root: str, session: dict, *, limit: int = 30,
         sleep=sleep,
     )
     records = result.get("records")
-    return records if isinstance(records, list) else []
+    if not isinstance(records, list):
+        raise BskyError("listRecords returned a malformed response")
+    return records
 
 
 def _validate_created(result: dict) -> str | None:
@@ -261,17 +263,11 @@ def create_post(text: str, handle: str, app_password: str,
         return find_posted_uri(records, text, slot_date=slot_date,
                                slot_time=slot_time, tz=tz)
 
-    precheck_failed = False
-    try:
-        existing = check_existing()
-    except BskyError:
-        # The check itself is down; proceed, but the retry loop below
-        # re-checks before every further attempt.
-        existing = None
-        precheck_failed = True
+    # Periodic catch-up revisits the same slots. If the duplicate check
+    # fails, leave the slot for a later run rather than posting blindly.
+    existing = check_existing()
     if existing:
-        return {"uri": existing, "already_posted": True,
-                "precheck_failed": precheck_failed}
+        return {"uri": existing, "already_posted": True}
 
     record = build_post_record(text, facets)
     last_error: BskyError | None = None
@@ -279,13 +275,9 @@ def create_post(text: str, handle: str, app_password: str,
         if attempt > 0:
             # The previous attempt may have landed even though its
             # response was lost; never post twice for one slot.
-            try:
-                found = check_existing()
-            except BskyError:
-                found = None
+            found = check_existing()
             if found:
-                return {"uri": found, "already_posted": True,
-                        "precheck_failed": precheck_failed}
+                return {"uri": found, "already_posted": True}
             sleep(1.0 * (2 ** (attempt - 1)))
         try:
             result = _post_json(
@@ -304,8 +296,7 @@ def create_post(text: str, handle: str, app_password: str,
             continue
         uri = _validate_created(result)
         if uri:
-            return {"uri": uri, "cid": result["cid"],
-                    "precheck_failed": precheck_failed}
+            return {"uri": uri, "cid": result["cid"]}
         # A "success" response without a usable uri/cid is not proof
         # of posting. Believe it only if the record is really there.
         try:
@@ -313,8 +304,7 @@ def create_post(text: str, handle: str, app_password: str,
         except BskyError:
             found = None
         if found:
-            return {"uri": found, "already_posted": True,
-                    "precheck_failed": precheck_failed}
+            return {"uri": found, "already_posted": True}
         raise BskyError(
             "createRecord returned a malformed response (no valid "
             "uri/cid) and the post was not found on the server"

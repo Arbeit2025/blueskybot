@@ -1,28 +1,20 @@
 name: daily-post
 
-# 9 posts a day (JST). GitHub cron is UTC, so each entry below is
-# JST minus 9 hours. The schedule string itself selects the slot in
-# the job step (see the case statement). Times are approximate:
-# GitHub Actions cron can be delayed several minutes.
+# Check due slots every 10 minutes, away from the busy top of the hour.
+# Slot times remain in config/post.json (JST). --due catches up to 2 hours
+# of delay; a missed scheduler tick is retried by the next tick.
 on:
   schedule:
-    - cron: "0 16 * * *"   # 01:00 JST recruit_night
-    - cron: "0 23 * * *"   # 08:00 JST greeting_morning
-    - cron: "0 0 * * *"    # 09:00 JST recruit_morning
-    - cron: "0 1 * * *"    # 10:00 JST promo_morning
-    - cron: "0 3 * * *"    # 12:00 JST greeting_noon
-    - cron: "0 7 * * *"    # 16:00 JST promo_afternoon
-    - cron: "0 10 * * *"   # 19:00 JST greeting_evening
-    - cron: "0 11 * * *"   # 20:00 JST recruit_evening
-    - cron: "0 13 * * *"   # 22:00 JST greeting_night
+    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
     inputs:
       slot:
-        description: "Slot to run (all = dry-run preview of every slot)"
+        description: "Slot to run (all = preview, due = catch up recent slots)"
         type: choice
         default: all
         options:
           - all
+          - due
           - greeting_morning
           - greeting_noon
           - greeting_evening
@@ -37,9 +29,17 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: blueskybot-posting
+  cancel-in-progress: false
+
 jobs:
   post:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,34 +53,24 @@ jobs:
           # anything other than "true" (or delete it) to stop real posts.
           POST_ENABLED: ${{ vars.POST_ENABLED }}
           EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
           INPUT_SLOT: ${{ inputs.slot }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          SLOT=""
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            SLOT="$INPUT_SLOT"
-          else
-            case "$SCHEDULE" in
-              "0 16 * * *") SLOT="recruit_night" ;;
-              "0 23 * * *") SLOT="greeting_morning" ;;
-              "0 0 * * *")  SLOT="recruit_morning" ;;
-              "0 1 * * *")  SLOT="promo_morning" ;;
-              "0 3 * * *")  SLOT="greeting_noon" ;;
-              "0 7 * * *")  SLOT="promo_afternoon" ;;
-              "0 10 * * *") SLOT="greeting_evening" ;;
-              "0 11 * * *") SLOT="recruit_evening" ;;
-              "0 13 * * *") SLOT="greeting_night" ;;
-              *) echo "unknown schedule: $SCHEDULE"; exit 1 ;;
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            set -- --due
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$INPUT_SLOT" in
+              all) python -m bot.post_daily; exit 0 ;;
+              due) set -- --due ;;
+              *) set -- --slot "$INPUT_SLOT" ;;
             esac
-          fi
-          echo "slot: $SLOT"
-          if [ "$SLOT" = "all" ]; then
-            python -m bot.post_daily
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_DRY_RUN" = "true" ]; then
-            python -m bot.post_daily --slot "$SLOT"
-          elif [ "$POST_ENABLED" = "true" ]; then
-            python -m bot.post_daily --slot "$SLOT" --post
           else
-            python -m bot.post_daily --slot "$SLOT"
+            echo "unsupported event: $EVENT_NAME"
+            exit 1
           fi
+          if [ "$POST_ENABLED" = "true" ] && {
+            [ "$EVENT_NAME" = "schedule" ] || [ "$INPUT_DRY_RUN" = "false" ];
+          }; then
+            set -- "$@" --post
+          fi
+          python -m bot.post_daily "$@"

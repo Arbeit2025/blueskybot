@@ -1,10 +1,9 @@
 """Same-day duplicate guard backed by a small JSON state file.
 
-State format: {"last_post_date": "2026-10-29", "last_text_hash": "..."}
+State format: {"posted": {"2026-10-29:greeting_morning": "<hash>"}}
 Note: on GitHub Actions the filesystem is ephemeral, so this guard is a
-local/second-layer defence. The primary defence is the once-a-day
-schedule; the date embedded in the template also makes each day's text
-unique, so an accidental re-run does not look like an exact duplicate.
+local/second-layer defence. Scheduled catch-up runs rely on the
+server-side duplicate check in bsky_client and workflow concurrency.
 """
 from __future__ import annotations
 
