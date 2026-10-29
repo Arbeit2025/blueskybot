@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time as time_module
 import urllib.error
 import urllib.parse
@@ -56,16 +57,34 @@ POST_COLLECTION = "app.bsky.feed.post"
 MAX_ATTEMPTS = 3
 WINDOW_BEFORE = timedelta(minutes=30)
 WINDOW_AFTER = timedelta(minutes=120)
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+_DID_RE = re.compile(r"did:[a-z0-9]+:[^\s/?#]+")
+_RKEY_RE = re.compile(r"[A-Za-z0-9._:~-]{1,512}")
 
 
 class BskyError(Exception):
     """Bluesky request failure. `transient` marks errors worth retrying."""
 
     def __init__(self, message: str, *, status: int | None = None,
-                 transient: bool = False):
+                 transient: bool = False, error_code: str | None = None):
         super().__init__(message)
         self.status = status
         self.transient = transient
+        self.error_code = error_code
+
+
+def is_post_uri(uri: object, expected_did: str | None = None,
+                expected_rkey: str | None = None) -> bool:
+    if not isinstance(uri, str) or not uri.startswith("at://"):
+        return False
+    parts = uri[5:].split("/")
+    if len(parts) != 3:
+        return False
+    did, collection, rkey = parts
+    return bool(_DID_RE.fullmatch(did) and collection == POST_COLLECTION
+                and _RKEY_RE.fullmatch(rkey) and rkey not in (".", "..")
+                and (expected_did is None or did == expected_did)
+                and (expected_rkey is None or rkey == expected_rkey))
 
 
 def pds_url() -> str:
@@ -107,7 +126,11 @@ def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
     window_start = slot_dt - WINDOW_BEFORE
     window_end = slot_dt + WINDOW_AFTER
     for item in records:
-        value = item.get("value") or {}
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if not isinstance(value, dict):
+            continue
         if value.get("text") != text:
             continue
         created = value.get("createdAt")
@@ -122,7 +145,7 @@ def find_posted_uri(records: list[dict], text: str, *, slot_date: date,
         local = moment.astimezone(tz)
         if window_start <= local <= window_end:
             uri = item.get("uri")
-            if isinstance(uri, str) and uri:
+            if is_post_uri(uri):
                 return uri
     return None
 
@@ -144,12 +167,29 @@ def _request_json(method: str, url: str, payload: dict | None = None,
         request.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            raw = response.read().decode("utf-8")
+            body = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise BskyError("API response exceeds size limit")
+        try:
+            raw = body.decode("utf-8")
+        except UnicodeError as exc:
+            raise BskyError("API response is not valid UTF-8") from exc
     except urllib.error.HTTPError as exc:
+        error_code = None
+        try:
+            error_body = json.loads(exc.read(4096).decode("utf-8"))
+            candidate = error_body.get("error") if isinstance(error_body, dict) else None
+            if isinstance(candidate, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", candidate):
+                error_code = candidate
+        except (ValueError, OSError, AttributeError):
+            pass
+        finally:
+            exc.close()
         raise BskyError(
             f"HTTP {exc.code} from {url}",
             status=exc.code,
             transient=_is_transient_status(exc.code),
+            error_code=error_code,
         ) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise BskyError(f"network error for {url}: {exc}",
@@ -160,6 +200,8 @@ def _request_json(method: str, url: str, payload: dict | None = None,
         raise BskyError(f"invalid JSON response from {url}") from exc
     if not isinstance(parsed, dict):
         raise BskyError(f"unexpected response shape from {url}")
+    if parsed.get("error") is not None:
+        raise BskyError("API returned an error object in a success response")
     return parsed
 
 
@@ -199,7 +241,9 @@ def create_session(handle: str, app_password: str, base: str | None = None,
         ),
         sleep=sleep,
     )
-    if not session.get("did") or not session.get("accessJwt"):
+    did, token = session.get("did"), session.get("accessJwt")
+    if not isinstance(did, str) or not _DID_RE.fullmatch(did) \
+            or not isinstance(token, str) or not token or any(c.isspace() for c in token):
         raise BskyError("createSession returned a malformed session")
     return session
 
@@ -222,15 +266,29 @@ def _list_recent_records(root: str, session: dict, *, limit: int = 100,
     records = result.get("records")
     if not isinstance(records, list):
         raise BskyError("listRecords returned a malformed response")
+    for item in records:
+        value = item.get("value") if isinstance(item, dict) else None
+        if not isinstance(value, dict) or not is_post_uri(item.get("uri"), session["did"]) \
+                or value.get("$type") != POST_COLLECTION or not isinstance(value.get("text"), str) \
+                or not isinstance(value.get("createdAt"), str):
+            raise BskyError("listRecords contains a malformed post record")
+        try:
+            moment = datetime.fromisoformat(value["createdAt"].replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                raise ValueError("timezone missing")
+        except ValueError as exc:
+            raise BskyError("listRecords contains an invalid post timestamp") from exc
     return records
 
 
-def _validate_created(result: dict) -> str | None:
+def _validate_created(result: dict, expected_did: str | None = None,
+                      expected_rkey: str | None = None) -> str | None:
     """The uri of a createRecord response, or None when malformed."""
     uri = result.get("uri")
     cid = result.get("cid")
-    if isinstance(uri, str) and uri.startswith("at://") \
-            and isinstance(cid, str) and cid:
+    if is_post_uri(uri, expected_did, expected_rkey) \
+            and isinstance(cid, str) and 0 < len(cid) <= 512 and cid.isascii() \
+            and not any(c.isspace() for c in cid):
         return uri
     return None
 
@@ -252,6 +310,8 @@ def create_post(text: str, handle: str, app_password: str,
     The duplicate checks only run when `slot_date` and `slot_time`
     are given (the scheduled-slot context).
     """
+    if not isinstance(attempts, int) or isinstance(attempts, bool) or not 1 <= attempts <= MAX_ATTEMPTS:
+        raise BskyError("attempts must be an integer between 1 and 3")
     root = (base or pds_url()).rstrip("/")
     session = create_session(handle, app_password, root, sleep=sleep)
     tz = ZoneInfo(tz_name)
@@ -294,7 +354,7 @@ def create_post(text: str, handle: str, app_password: str,
                 raise
             last_error = exc
             continue
-        uri = _validate_created(result)
+        uri = _validate_created(result, session["did"])
         if uri:
             return {"uri": uri, "cid": result["cid"]}
         # A "success" response without a usable uri/cid is not proof
