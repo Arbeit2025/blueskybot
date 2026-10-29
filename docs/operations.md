@@ -1,0 +1,62 @@
+# 自動起動・外部からの補助起動・監視
+
+## 構成
+
+- GitHubの通常予約：毎時03・13・23・33・43・53分。予定から2時間以内の未投稿枠を処理する。
+- 外部の補助起動：ChatGPTの毎時タスクが、所有者Arbeit2025の権限で運用Issue #2の本文時刻を更新する。`issues: edited`を受けたdaily-postが同じ処理を行う。
+- 監視：同じ外部タスクがGitHubの実行履歴・実行結果とBlueskyの公開投稿を読む。通常予約が30分以上止まった場合、両方の起動経路が90分以上止まった場合、予定から30分経っても公開投稿がない場合を区別する。
+
+外部タスクは最大1時間間隔。30分の閾値を超えた直後の通知や、秒・分単位での定時起動を保証する構成ではない。GitHub Actions全体が停止した場合は外部起動でも実行できず、外部タスクから異常を知らせる。補助起動と監視はChatGPTのタスク基盤に依存する。
+
+外部起動には新しい個人アクセストークンやBluesky認証情報の移し替えを使わない。GitHubの既存SecretsはGitHub内の実行だけで使用する。Issue本文には公開してよい運用時刻と状態だけを保存する。
+
+## 外部起動の制限
+
+- 対象リポジトリとIssue番号は固定。所有者が作成した開いているIssue #2の本文を、所有者本人が編集した場合にだけ許可する。
+- 一般のIssue・第三者の操作・タイトルだけの編集・閉じたIssueは投稿処理へ進まない。
+- Issue本文をコマンド、投稿文、投稿時刻、接続先、認証情報として実行・利用しない。
+- 投稿ジョブは起動元を問わず同じconcurrencyグループで直列化する。重複防止はサーバー照合を併用する。
+- 2時間を超えた古い挨拶は再生しない。長時間停止からの再開時に古い投稿を大量送信しない。
+
+## 結果の確認
+
+daily-postの各実行で、ActionsのSummary、ログの`BOT_REPORT_JSON=`、7日間保存するJSON artifactに結果を記録する。
+
+| 結果 | 意味 |
+| --- | --- |
+| posted | 新しく投稿し、公開URIを取得した |
+| already_posted | ローカル状態またはサーバー照合で投稿済み |
+| no_due | 今は直近2時間内の対象枠がない |
+| dry_run | 投稿しない確認実行 |
+| disabled | POST_ENABLED=falseによる意図的な停止 |
+| configuration_error | 投稿スイッチ未設定・不正な値・不正な選択など |
+| missing_credentials | 必要なSecretsが未設定 |
+| authentication_error | APIの401・403 |
+| api_error | API・通信・照合の失敗 |
+| state_write_error | 投稿は存在するが、補助状態の保存に失敗。再実行はサーバー照合が必要 |
+| ignored_event | 許可されていない外部イベント |
+
+設定不足は緑色のdry-runとして扱わず失敗終了する。明示的な停止はdisabledとして正常終了するが、投稿成功件数に数えない。手動のallは常にプレビューで、既定のdry_run=trueも維持する。
+
+## 投稿しない本番接続確認
+
+Actionsの「check-access (read only)」を手動実行すると、既存のSecretsで認証し、自分の最近の投稿を読み取る。投稿作成APIは呼ばない。トークン・パスワードは出力しない。
+
+## 外部監視の判定
+
+`config/operations.json`の監視開始時刻以降の枠を判定し、それより前の未投稿を新しい事故として数えない。日付またぎにも対応する。公開フィードの取得エラー・ページ不足は「確認不能」とし、正常と扱わない。
+
+```bash
+python -m bot.health --runs-json runs.json --feed-json feed.json \
+  --execution-json latest-bot-report.json --output health.json
+```
+
+入力はGitHubのworkflow runs APIのJSON、BlueskyのgetAuthorFeedのJSON、最新の実投稿経路のBOT_REPORT_JSON。公開フィードにcursorがあり、必要な時刻まで取得できていない場合は追加ページを取得し、feed配列を連結してcursorを外してから判定する。APIエラーを空配列へ置き換えない。
+
+- healthy：今回観測した範囲で異常なし。
+- degraded：GitHubの通常予約が止まっているが、外部経路は稼働。
+- unhealthy：未投稿、両経路の停止、実行エラーなど。
+- disabled：意図的に停止。
+- unknown：取得や判定に失敗し、確認不能。
+
+投稿成功とテスト成功、外部起動成功と通常予約の復旧は、それぞれ区別して運用記録へ残す。

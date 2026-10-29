@@ -1,0 +1,29 @@
+name: check-access (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify authentication and read access without posting
+        env:
+          EVENT_NAME: workflow_dispatch
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          BOT_REPORT_PATH: ${{ runner.temp }}/bot-access-report.json
+        run: python -m bot.check_access
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bot-access-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bot-access-report.json
+          retention-days: 7

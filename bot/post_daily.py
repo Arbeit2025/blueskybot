@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 from bot.state import already_posted_slot, load_state, record_post_slot  # noqa: E402
 from bot.template import build_link_facets, render_template, validate_post  # noqa: E402
+from bot.reporting import finish_report, new_report  # noqa: E402
 
 REQUIRED_ENV = ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"]
 CATCHUP_WINDOW = timedelta(hours=2)
@@ -67,8 +68,13 @@ def due_slots(config: dict, now: datetime) -> list[tuple[dict, datetime]]:
 
 
 def run_slot(slot: dict, config: dict, scheduled_at: datetime,
-             state_path: Path, *, post: bool) -> int:
+             state_path: Path, *, post: bool, outcomes: list | None = None) -> int:
     date_str = scheduled_at.strftime("%Y-%m-%d")
+    def outcome(status: str, code: int = 0, **details) -> int:
+        if outcomes is not None:
+            outcomes.append({"slot_id": slot["id"], "scheduled_at": scheduled_at.isoformat(),
+                             "status": status, **details})
+        return code
     text = render_slot(slot, scheduled_at)
     print(f"--- slot {slot['id']} ({slot['time_jst']} JST) ---")
     print(text)
@@ -78,23 +84,23 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
     problems = validate_post(text)
     if problems:
         print("validation failed: " + "; ".join(problems))
-        return 1
+        return outcome("validation_error", 1, detail="; ".join(problems))
 
     state = load_state(state_path)
     if already_posted_slot(state, date_str, slot["id"]):
         print("skip: this slot was already posted for its scheduled date (state file)")
-        return 0
+        return outcome("already_posted", detail="local state")
 
     if not post:
         print("dry-run: nothing was posted. Pass --post with POST_ENABLED=true to post.")
-        return 0
+        return outcome("dry_run")
     if os.environ.get("POST_ENABLED") != "true":
         print("refused: --post was given but POST_ENABLED is not 'true'. Nothing posted.")
-        return 1
+        return outcome("disabled", 1, detail="POST_ENABLED is not true")
     missing = [name for name in REQUIRED_ENV if not os.environ.get(name)]
     if missing:
         print("refused: missing credentials in environment: " + ", ".join(missing))
-        return 1
+        return outcome("missing_credentials", 1, detail=", ".join(missing))
 
     from bot.bsky_client import BskyError, create_post
 
@@ -111,14 +117,20 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
         )
     except BskyError as exc:
         print(f"error: post failed: {exc}")
-        return 1
-    record_post_slot(state_path, state, date_str, slot["id"], text)
+        status = "authentication_error" if exc.status in (401, 403) else "api_error"
+        return outcome(status, 1, detail=str(exc))
+    try:
+        record_post_slot(state_path, state, date_str, slot["id"], text)
+    except OSError as exc:
+        print(f"error: post exists but local state could not be saved: {exc}")
+        return outcome("state_write_error", 1, uri=result.get("uri"),
+                       detail="post exists; server-side duplicate check is required on retry")
     if result.get("already_posted"):
         print(f"skip: this slot was already posted (server check): "
               f"uri={result.get('uri')}")
-        return 0
+        return outcome("already_posted", uri=result.get("uri"), detail="server check")
     print(f"posted: uri={result.get('uri')}")
-    return 0
+    return outcome("posted", uri=result.get("uri"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -129,10 +141,21 @@ def main(argv: list[str] | None = None) -> int:
     selection.add_argument("--due", action="store_true", help="select slots due in the last 2 hours")
     parser.add_argument("--config", default=str(ROOT / "config" / "post.json"))
     parser.add_argument("--state", default=str(ROOT / "state" / "last_post.json"))
+    parser.add_argument("--report", default=None, help="write JSON outcomes (never credentials)")
     args = parser.parse_args(argv)
 
-    config = load_config(Path(args.config))
-    tz = ZoneInfo(config.get("timezone", "Asia/Tokyo"))
+    report = new_report("post" if args.post else "dry_run")
+    def finish(code: int, status: str | None = None, detail: str = "") -> int:
+        if status:
+            report["outcomes"].append({"status": status, "detail": detail})
+        finish_report(report, code, args.report)
+        return code
+
+    try:
+        config = load_config(Path(args.config))
+        tz = ZoneInfo(config.get("timezone", "Asia/Tokyo"))
+    except (ValueError, OSError, KeyError, AttributeError) as exc:
+        return finish(1, "configuration_error", str(exc))
     now = datetime.now(tz)
     print(f"date: {now.strftime('%Y-%m-%d %H:%M')} ({config.get('timezone', 'Asia/Tokyo')})")
 
@@ -144,12 +167,12 @@ def main(argv: list[str] | None = None) -> int:
         if slot is None:
             known = ", ".join(s["id"] for s in config.get("slots", []))
             print(f"error: unknown slot '{args.slot}'. known slots: {known}")
-            return 1
+            return finish(1, "configuration_error", "unknown slot")
         selected = [(slot, now)]
     else:
         if args.post:
             print("refused: --post requires --slot or --due. Nothing posted.")
-            return 1
+            return finish(1, "configuration_error", "--post requires --slot or --due")
         for slot in config.get("slots", []):
             text = render_slot(slot, now)
             problems = validate_post(text)
@@ -157,16 +180,18 @@ def main(argv: list[str] | None = None) -> int:
             print(text)
             if problems:
                 print("validation failed: " + "; ".join(problems))
-                return 1
+                return finish(1, "validation_error", "; ".join(problems))
         print("dry-run: nothing was posted.")
-        return 0
+        return finish(0, "dry_run", "all slots previewed")
 
     status = 0
+    if not selected:
+        return finish(0, "no_due", "no slot is due in the last 2 hours")
     for slot, scheduled_at in selected:
         # A failed slot must not stop other due slots from being handled.
         status = max(status, run_slot(slot, config, scheduled_at,
-                                     Path(args.state), post=args.post))
-    return status
+                                     Path(args.state), post=args.post, outcomes=report["outcomes"]))
+    return finish(status)
 
 
 if __name__ == "__main__":

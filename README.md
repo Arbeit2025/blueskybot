@@ -21,8 +21,8 @@ Bluesky（AT Protocol）向けに作り替えたもの。
 | 20:00 | 募集 | こんばんは＋ゲーム案募集＋ミニゲーム集URL |
 | 22:00 | 挨拶 | おやすみ |
 
-定期起動は毎時07・17・27・37・47・57分。通常は上の予定時刻の
-約7分後に投稿するが、GitHub Actions の混雑でさらに遅れる場合がある。
+定期起動は毎時03・13・23・33・43・53分。通常は上の予定時刻の
+約3分後に投稿するが、GitHub Actions の混雑でさらに遅れる場合がある。
 毎回、予定時刻から2時間以内の未投稿枠を古い順に確認するため、
 起動を1回取りこぼしても次の起動で回収できる。予定前の枠と、
 2時間を超えた古い枠は投稿しない。時刻ぴったりの実行は保証しない。
@@ -58,7 +58,11 @@ Bluesky（AT Protocol）向けに作り替えたもの。
   されていた」可能性を照合してから投稿し直す。4xx（429除く）は
   即時失敗にする。
 - **投稿専用。** いいね・フォロー・返信はしない。
-- **常駐サーバーなし。** GitHub Actions の定期実行で回す。
+- **外部からの補助起動と監視。** GitHub Actionsの定期実行に加え、
+  ChatGPTの毎時タスクから運用Issue #2を更新して未投稿を確認する。
+  認証情報はGitHub内だけで使う。外部タスクは1時間間隔。
+- **実行結果を区別。** 投稿成功・投稿済み・対象なし・確認実行・
+  意図的な停止・設定不足・認証エラーをActions SummaryとJSONに残す。
 - **リンクは facets で clickable にする。** API 経由の投稿では
   URL は自動でリンクにならないため、バイト位置の facets を付ける。
 
@@ -78,14 +82,16 @@ python -m bot.post_daily --due             # dry-run：直近2時間の枠だけ
   `{date_ja}` / `{weekday_ja}` / `{slot_time}`、上限300字）
 - 投稿の予定時刻： `config/post.json` の `time_jst`
 - 起動間隔： `.github/workflows/daily-post.yml` の cron
-  （毎時07・17・27・37・47・57分に `--due` を実行）
+  （毎時03・13・23・33・43・53分に `--due` を実行）
 - 認証情報： `.env.example` を参照。実値は GitHub Secrets /
   ローカル `.env` のみに置き、リポジトリへ入れない。
   パスワードは本体パスワードではなく **アプリパスワード** を使う。
 
 ## 止め方（キルスイッチ）
 
-GitHub の repository variable `POST_ENABLED` を `true` 以外にするか、
-ワークフロー `daily-post` を Disable する。以後は dry-run のみになる。
+GitHub の repository variable `POST_ENABLED` を明示的に `false` にするか、
+ワークフロー `daily-post` を Disable する。外部起動でも投稿しない。
+未設定や不正な値は設定エラーとして失敗終了し、意図的な停止と区別する。
 
 詳しい導入手順は `docs/install.md`、設計は `docs/design.md`。
+外部起動・監視・投稿しない本番接続確認は [運用手順](docs/operations.md) を参照。

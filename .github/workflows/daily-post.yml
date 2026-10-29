@@ -5,7 +5,10 @@ name: daily-post
 # of delay; a missed scheduler tick is retried by the next tick.
 on:
   schedule:
-    - cron: "7,17,27,37,47,57 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
+  # External hourly fallback: only the owner's edit of control issue #2.
+  issues:
+    types: [edited]
   workflow_dispatch:
     inputs:
       slot:
@@ -38,10 +41,19 @@ concurrency:
 
 jobs:
   post:
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.issue.number == 2 &&
+       github.actor == github.repository_owner &&
+       github.event.issue.user.login == github.repository_owner &&
+       github.event.issue.state == 'open' &&
+       github.event.changes.body != null)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -55,22 +67,12 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_SLOT: ${{ inputs.slot }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          if [ "$EVENT_NAME" = "schedule" ]; then
-            set -- --due
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            case "$INPUT_SLOT" in
-              all) python -m bot.post_daily; exit 0 ;;
-              due) set -- --due ;;
-              *) set -- --slot "$INPUT_SLOT" ;;
-            esac
-          else
-            echo "unsupported event: $EVENT_NAME"
-            exit 1
-          fi
-          if [ "$POST_ENABLED" = "true" ] && {
-            [ "$EVENT_NAME" = "schedule" ] || [ "$INPUT_DRY_RUN" = "false" ];
-          }; then
-            set -- "$@" --post
-          fi
-          python -m bot.post_daily "$@"
+          BOT_REPORT_PATH: ${{ runner.temp }}/bot-report.json
+        run: python -m bot.runner
+      - name: Save execution outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bot-report.json
+          retention-days: 7

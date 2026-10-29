@@ -19,7 +19,8 @@
 2. Settings → Secrets and variables → Actions：
 - Secrets: `BLUESKY_HANDLE`（例：`your-handle.bsky.social`）/
 `BLUESKY_APP_PASSWORD`（手順1のアプリパスワード）
-- Variables: `POST_ENABLED` は最初は作らない（＝dry-run のまま）
+- Variables: `POST_ENABLED=false` を明示して意図的な停止状態で始める。
+  未設定は設定エラーになる。手動の既定プレビューは引き続き投稿しない。
 3. Actions タブで `daily-post` を手動実行（workflow_dispatch）し、
 slot=all の dry-run で全9スロットの投稿文が表示されることを確認
 
@@ -29,9 +30,9 @@ slot=all の dry-run で全9スロットの投稿文が表示されることを�
 2. Variables に `POST_ENABLED=true` を追加
 3. `daily-post` を手動実行し、slot を1つ選んで dry_run=false で
 1件だけ実投稿し、Bluesky 側で表示とリンクを確認
-4. 以後は毎時07・17・27・37・47・57分に起動し、`config/post.json`
+4. 以後は毎時03・13・23・33・43・53分に起動し、`config/post.json`
 の予定時刻（JST 01:00／08:00／09:00／10:00／12:00／16:00／19:00／
-20:00／22:00）を過ぎた未投稿枠を確認する。通常は予定の約7分後。
+20:00／22:00）を過ぎた未投稿枠を確認する。通常は予定の約3分後。
 起動に遅れや取りこぼしがあっても2時間以内なら次の起動で回収する。
 2時間を超えた枠はまとめて投稿しない。GitHub 側が起動し続けない
 場合の復旧や、時刻ぴったりの投稿を保証する仕組みではない。

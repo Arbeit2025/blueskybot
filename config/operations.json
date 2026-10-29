@@ -1,0 +1,10 @@
+{
+  "repository": "Arbeit2025/blueskybot",
+  "handle": "arbeit2025.bsky.social",
+  "control_issue": 2,
+  "monitor_since_utc": "2026-10-29T05:49:24Z",
+  "native_heartbeat_minutes": 30,
+  "external_heartbeat_minutes": 90,
+  "post_grace_minutes": 30,
+  "external_interval_minutes": 60
+}
