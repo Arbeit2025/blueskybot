@@ -8,6 +8,7 @@ import os
 import time
 
 from bot.bsky_client import BskyError, _get_slot_record, _list_recent_records, create_session, pds_url
+from bot.post_daily import ROOT, load_expected_did
 from bot.reporting import finish_report, new_report
 
 
@@ -21,8 +22,21 @@ def main() -> int:
         report["outcomes"].append({"status": "missing_credentials", "detail": ", ".join(missing)})
     else:
         try:
+            expected_did = load_expected_did(ROOT / "config" / "operations.json")
+        except ValueError as exc:
+            code = 1
+            report["outcomes"].append({"status": "configuration_error", "detail": str(exc)})
+            finish_report(report, code, os.environ.get("BOT_REPORT_PATH"))
+            return code
+        try:
             root = pds_url()
             session = create_session(os.environ["BLUESKY_HANDLE"], os.environ["BLUESKY_APP_PASSWORD"], root)
+            if expected_did is not None and session["did"] != expected_did:
+                code = 1
+                report["outcomes"].append({"status": "authentication_error",
+                                           "detail": "identity mismatch: session account differs from operations expected_did"})
+                finish_report(report, code, os.environ.get("BOT_REPORT_PATH"))
+                return code
             records = _list_recent_records(root, session)
             if records:
                 record=records[0]

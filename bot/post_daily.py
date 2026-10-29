@@ -73,6 +73,31 @@ def load_config(path: Path) -> dict:
     return config
 
 
+_DID_RE = re.compile(r"did:[a-z0-9]+:[^\s/?#]+")
+
+
+def load_expected_did(path: Path) -> str | None:
+    """The account this bot is allowed to post as, from operations.json.
+
+    Returns None when the file does not exist (the identity guard is
+    then off). A file that exists but is malformed is a configuration
+    error: a guard that silently disables itself is worse than none.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("operations config must be a JSON object")
+    did = data.get("expected_did")
+    if did is None:
+        return None
+    if not isinstance(did, str) or not _DID_RE.fullmatch(did):
+        raise ValueError("operations expected_did is not a valid DID")
+    return did
+
+
 def find_slot(config: dict, slot_id: str) -> dict | None:
     for slot in config.get("slots", []):
         if slot["id"] == slot_id:
@@ -103,7 +128,8 @@ def due_slots(config: dict, now: datetime) -> list[tuple[dict, datetime]]:
 
 
 def run_slot(slot: dict, config: dict, scheduled_at: datetime,
-             state_path: Path, *, post: bool, outcomes: list | None = None) -> int:
+             state_path: Path, *, post: bool, outcomes: list | None = None,
+             expected_did: str | None = None) -> int:
     date_str = scheduled_at.strftime("%Y-%m-%d")
     def outcome(status: str, code: int = 0, **details) -> int:
         if outcomes is not None:
@@ -160,10 +186,12 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
             slot_time=slot_time,
             slot_id=slot["id"],
             tz_name=config.get("timezone", "Asia/Tokyo"),
+            expected_did=expected_did,
         )
     except BskyError as exc:
         print(f"error: post failed: {exc}")
-        status = "authentication_error" if exc.status in (401, 403) else "api_error"
+        status = "authentication_error" if exc.status in (401, 403) \
+            or exc.error_code == "IdentityMismatch" else "api_error"
         return outcome(status, 1, detail=str(exc))
     try:
         record_post_slot(state_path, state, date_str, slot["id"], text)
@@ -200,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = load_config(Path(args.config))
         tz = ZoneInfo(config.get("timezone", "Asia/Tokyo"))
+        expected_did = load_expected_did(ROOT / "config" / "operations.json")
     except (ValueError, OSError, KeyError, AttributeError) as exc:
         return finish(1, "configuration_error", str(exc))
     now = datetime.now(tz)
@@ -236,7 +265,8 @@ def main(argv: list[str] | None = None) -> int:
     for slot, scheduled_at in selected:
         # A failed slot must not stop other due slots from being handled.
         status = max(status, run_slot(slot, config, scheduled_at,
-                                     Path(args.state), post=args.post, outcomes=report["outcomes"]))
+                                     Path(args.state), post=args.post, outcomes=report["outcomes"],
+                                     expected_did=expected_did))
     return finish(status)
 
 

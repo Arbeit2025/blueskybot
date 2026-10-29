@@ -126,6 +126,7 @@ class StructuredOutcomeTests(unittest.TestCase):
     def test_read_only_access_check_never_creates_a_post_or_prints_tokens(self):
         with mock.patch.dict(os.environ, {"BLUESKY_HANDLE": "fake", "BLUESKY_APP_PASSWORD": "password-sentinel"}, clear=True), \
                 mock.patch.object(check_access, "create_session", return_value={"did": "did:plc:fake", "accessJwt": "token-sentinel"}), \
+                mock.patch.object(check_access, "load_expected_did", return_value="did:plc:fake"), \
                 mock.patch.object(check_access, "_list_recent_records", return_value=[]), \
                 mock.patch.object(bsky_client, "create_post") as send, \
                 contextlib.redirect_stdout(io.StringIO()) as output:

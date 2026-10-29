@@ -147,6 +147,7 @@ class IdempotencyTests(unittest.TestCase):
         record={"uri":"at://did:plc:test/app.bsky.feed.post/key","value":{"text":"hello"}}
         with mock.patch.dict(os.environ,{"BLUESKY_HANDLE":"fake","BLUESKY_APP_PASSWORD":"fake"},clear=True), \
              mock.patch.object(check_access,"create_session",return_value={"did":"did:plc:test","accessJwt":"fake"}), \
+             mock.patch.object(check_access,"load_expected_did",return_value="did:plc:test"), \
              mock.patch.object(check_access,"_list_recent_records",return_value=[record]), \
              mock.patch.object(check_access,"_get_slot_record",side_effect=c.BskyError("lookup unavailable")), \
              contextlib.redirect_stdout(io.StringIO()) as output:

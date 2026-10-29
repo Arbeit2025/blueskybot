@@ -86,6 +86,8 @@ class HttpIntegrationTests(unittest.TestCase):
                         "BLUESKY_APP_PASSWORD": "fake-password", "BLUESKY_PDS_URL": f"http://127.0.0.1:{port}",
                         "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}), \
                     mock.patch.object(socket.socket, "connect", guarded_connect), \
+                    mock.patch.object(post_daily, "load_expected_did", return_value="did:plc:fake"), \
+                    mock.patch.object(check_access, "load_expected_did", return_value="did:plc:fake"), \
                     contextlib.redirect_stdout(io.StringIO()):
                 config = post_daily.load_config(post_daily.ROOT / "config/post.json")
                 statuses = []

@@ -41,7 +41,13 @@ Posting is hardened against the failure modes of scheduled CI runs:
   stall a scheduled run past its workflow timeout.
 
 The PDS base URL defaults to https://bsky.social and can be overridden
-with BLUESKY_PDS_URL for accounts hosted on another PDS.
+with BLUESKY_PDS_URL for accounts hosted on another PDS. The override
+is validated before any credential is sent: it must be an https URL
+(http is accepted only for loopback test servers), with no embedded
+credentials, query, or fragment. Posting can also be pinned to an
+expected account: when `expected_did` is given, create_post refuses
+to post if the session belongs to a different account, so a wrong
+app password in Secrets cannot silently post as another account.
 
 Network is touched only inside the request helpers. The record
 building and the duplicate matching are pure functions so they can be
@@ -171,8 +177,34 @@ def _get_slot_record(root: str, session: dict, rkey: str, text: str, *, sleep) -
     return result["uri"]
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def validate_pds_url(raw: str) -> str:
+    """Validate a PDS base URL before credentials are sent to it."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise BskyError("PDS URL is empty")
+    parts = urllib.parse.urlsplit(raw.strip())
+    host = parts.hostname
+    if not host:
+        raise BskyError("PDS URL has no host")
+    if parts.username or parts.password:
+        raise BskyError("PDS URL must not embed credentials")
+    if parts.query or parts.fragment:
+        raise BskyError("PDS URL must not contain a query or fragment")
+    if parts.scheme == "https":
+        pass
+    elif parts.scheme == "http" and host in _LOOPBACK_HOSTS:
+        pass  # local stub servers in tests
+    else:
+        raise BskyError(
+            "PDS URL must use https (http is allowed only for loopback "
+            "test servers); refusing to send the app password there")
+    return raw.strip().rstrip("/")
+
+
 def pds_url() -> str:
-    return os.environ.get("BLUESKY_PDS_URL", DEFAULT_PDS_URL).rstrip("/")
+    return validate_pds_url(os.environ.get("BLUESKY_PDS_URL", DEFAULT_PDS_URL))
 
 
 def format_created_at(now: datetime | None = None) -> str:
@@ -319,7 +351,7 @@ def _with_retry(fn, *, attempts: int = MAX_ATTEMPTS, base_delay: float = 1.0,
 def create_session(handle: str, app_password: str, base: str | None = None,
                    *, sleep=time_module.sleep) -> dict:
     """Log in with handle + app password. Returns the session dict."""
-    root = (base or pds_url()).rstrip("/")
+    root = validate_pds_url(base) if base is not None else pds_url()
     session = _with_retry(
         lambda: _post_json(
             f"{root}/xrpc/com.atproto.server.createSession",
@@ -413,6 +445,7 @@ def create_post(text: str, handle: str, app_password: str,
                 slot_time: time | None = None,
                 slot_id: str | None = None,
                 tz_name: str = "Asia/Tokyo",
+                expected_did: str | None = None,
                 sleep=time_module.sleep,
                 attempts: int = MAX_ATTEMPTS) -> dict:
     """Post `text` to Bluesky, hardened against duplicates and retries.
@@ -428,10 +461,17 @@ def create_post(text: str, handle: str, app_password: str,
         raise BskyError("attempts must be an integer between 1 and 3")
     if slot_id is not None and (not isinstance(slot_id, str) or not slot_id or slot_date is None or slot_time is None):
         raise BskyError("slot_id requires a non-empty ID, scheduled date and time")
-    root = (base or pds_url()).rstrip("/")
+    if expected_did is not None and (not isinstance(expected_did, str)
+                                     or not _DID_RE.fullmatch(expected_did)):
+        raise BskyError("expected_did is not a valid DID")
+    root = validate_pds_url(base) if base is not None else pds_url()
     tz = ZoneInfo(tz_name)
     rkey = slot_record_key(slot_date, slot_time, tz, slot_id) if slot_id is not None else None
     session = create_session(handle, app_password, root, sleep=sleep)
+    if expected_did is not None and session["did"] != expected_did:
+        raise BskyError(
+            "session belongs to a different account than expected_did; "
+            "refusing to post", error_code="IdentityMismatch")
 
     def check_existing(*, legacy: bool = True) -> str | None:
         if rkey is not None:
