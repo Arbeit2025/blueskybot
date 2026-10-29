@@ -100,8 +100,24 @@ def slot_key(date_str: str, slot_id: str) -> str:
     return f"{date_str}:{slot_id}"
 
 
-def already_posted_slot(state: dict, date_str: str, slot_id: str) -> bool:
-    return slot_key(date_str, slot_id) in state.get("posted", {})
+def already_posted_slot(state: dict, date_str: str, slot_id: str,
+                        text: str | None = None) -> bool:
+    """Whether the state file proves this slot was posted.
+
+    With `text`, the stored hash must match the text about to be sent.
+    A bare key hit only proves *something* was posted under this slot:
+    if the template changed after that post, trusting the key would
+    silently skip the corrected text, so callers that know the text
+    pass it and let the server-side record-key check arbitrate.
+    Without `text` the legacy key-only check is kept for other callers.
+    """
+    posted = state.get("posted", {})
+    key = slot_key(date_str, slot_id)
+    if key not in posted:
+        return False
+    if text is None:
+        return True
+    return posted[key] == text_hash(text)
 
 
 def _prune_posted(posted: dict, current_date_str: str) -> dict:

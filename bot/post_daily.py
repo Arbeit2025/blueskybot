@@ -152,7 +152,7 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
     except StateError as exc:
         print(f"error: {exc}")
         return outcome("state_read_error", 1, detail=str(exc))
-    if already_posted_slot(state, date_str, slot["id"]):
+    if already_posted_slot(state, date_str, slot["id"], text):
         print("skip: this slot was already posted for its scheduled date (state file)")
         return outcome("already_posted", detail="local state")
 
