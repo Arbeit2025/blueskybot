@@ -190,19 +190,35 @@ def run_slot(slot: dict, config: dict, scheduled_at: datetime,
         )
     except BskyError as exc:
         print(f"error: post failed: {exc}")
+        if exc.error_code == "SlotConflict":
+            # The slot key already holds a post with a different text
+            # (the template was edited after this slot posted). The
+            # client refuses to overwrite it, and no retry can change
+            # that, so the slot is done for the day: report it as a
+            # distinct non-error outcome instead of failing every
+            # catch-up run while the slot stays in the window.
+            return outcome("slot_conflict", 0, detail=str(exc))
         status = "authentication_error" if exc.status in (401, 403) \
             or exc.error_code == "IdentityMismatch" else "api_error"
         return outcome(status, 1, detail=str(exc))
+    if result.get("already_posted"):
+        # The post already exists on the server, so this run posted
+        # nothing. Topping up the local state is best-effort only:
+        # a state-write failure must not turn a successful skip
+        # into a failed run.
+        try:
+            record_post_slot(state_path, state, date_str, slot["id"], text)
+        except OSError:
+            pass
+        print(f"skip: this slot was already posted (server check): "
+              f"uri={result.get('uri')}")
+        return outcome("already_posted", uri=result.get("uri"), detail="server check")
     try:
         record_post_slot(state_path, state, date_str, slot["id"], text)
     except OSError as exc:
         print(f"error: post exists but local state could not be saved: {exc}")
         return outcome("state_write_error", 1, uri=result.get("uri"),
                        detail="post exists; server-side duplicate check is required on retry")
-    if result.get("already_posted"):
-        print(f"skip: this slot was already posted (server check): "
-              f"uri={result.get('uri')}")
-        return outcome("already_posted", uri=result.get("uri"), detail="server check")
     print(f"posted: uri={result.get('uri')}")
     return outcome("posted", uri=result.get("uri"))
 
