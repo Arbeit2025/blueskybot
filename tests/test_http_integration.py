@@ -118,12 +118,18 @@ class HttpIntegrationTests(unittest.TestCase):
                 spill = [s for s in config["slots"]
                          if s["time_jst"] >= "22:15" or s["time_jst"] <= "00:45"]
                 self.assertEqual(len(spill), 11)
-                total = 96 + len(spill)
+                # The day's random slot also posts exactly once: its
+                # resolved time is covered by the day's runs and the
+                # 2-hour catch-up, like any fixed slot.
+                random_today = post_daily.resolved_random_slots(
+                    config, datetime(2026, 10, 30).date())
+                total = 96 + len(spill) + len(random_today)
                 self.assertEqual(len(records), total)
                 self.assertEqual(statuses.count("posted"), total)
                 self.assertGreaterEqual(statuses.count("already_posted"), 96 * 2)
                 expected = sorted([slot["template"] for slot in config["slots"]]
-                                  + [slot["template"] for slot in spill])
+                                  + [slot["template"] for slot in spill]
+                                  + [slot["template"] for slot in random_today])
                 self.assertEqual(sorted(r["value"]["text"] for r in records), expected)
                 self.assertEqual(check_access.main(), 0)
                 self.assertEqual(len(records), total)  # read-only diagnostic cannot add a post

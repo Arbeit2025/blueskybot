@@ -16,11 +16,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -70,7 +71,66 @@ def load_config(path: Path) -> dict:
         rendered = render_slot(slot, datetime(2000, 12, 31))
         if validate_post(rendered):
             raise ValueError("slot template renders an empty or oversized post")
+    random_slots = config.get("random_slots", [])
+    if not isinstance(random_slots, list):
+        raise ValueError("random_slots must be a list")
+    for random_slot in random_slots:
+        if not isinstance(random_slot, dict):
+            raise ValueError("each random slot must be an object")
+        slot_id = random_slot.get("id")
+        template = random_slot.get("template")
+        if not isinstance(slot_id, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", slot_id):
+            raise ValueError("random slot id must be 1-64 ASCII letters, digits, underscore or dash, starting with a letter")
+        if slot_id in ids:
+            raise ValueError("duplicate slot id")
+        ids.add(slot_id)
+        start = _window_minutes(random_slot.get("window_start_jst"), "window_start_jst")
+        end = _window_minutes(random_slot.get("window_end_jst"), "window_end_jst")
+        if end - start < 15 or (end - start) % 15 != 0:
+            raise ValueError("random slot window must span a positive multiple of 15 minutes")
+        if not isinstance(template, str):
+            raise ValueError("random slot template must be a string")
+        probe = {"id": slot_id, "time_jst": random_slot["window_start_jst"],
+                 "template": template}
+        rendered = render_slot(probe, datetime(2000, 12, 31))
+        if validate_post(rendered):
+            raise ValueError("random slot template renders an empty or oversized post")
     return config
+
+
+def _window_minutes(value: object, field: str) -> int:
+    if not isinstance(value, str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+        raise ValueError(f"random slot {field} must use HH:MM (00:00-23:59)")
+    hour, minute = map(int, value.split(":"))
+    if minute % 15 != 0:
+        raise ValueError(f"random slot {field} must be on a 15-minute boundary")
+    return hour * 60 + minute
+
+
+def resolved_random_slot(random_slot: dict, day: date) -> dict:
+    """One random slot materialised for `day` as a normal slot dict.
+
+    The time is a deterministic function of the date and the slot id
+    (SHA-256 seed), so every tick of the day agrees on the same time
+    without extra state, while the time still changes from day to day.
+    The chosen time sits on the 15-minute grid inside the window, so
+    the regular 15-minute trigger and catch-up logic apply unchanged.
+    """
+    start = _window_minutes(random_slot["window_start_jst"], "window_start_jst")
+    end = _window_minutes(random_slot["window_end_jst"], "window_end_jst")
+    ticks = (end - start) // 15
+    seed = hashlib.sha256(f"{day.isoformat()}:{random_slot['id']}".encode("utf-8")).digest()
+    offset = int.from_bytes(seed[:8], "big") % ticks
+    minutes = start + offset * 15
+    return {
+        "id": random_slot["id"],
+        "time_jst": f"{minutes // 60:02d}:{minutes % 60:02d}",
+        "template": random_slot["template"],
+    }
+
+
+def resolved_random_slots(config: dict, day: date) -> list[dict]:
+    return [resolved_random_slot(rs, day) for rs in config.get("random_slots", [])]
 
 
 _DID_RE = re.compile(r"did:[a-z0-9]+:[^\s/?#]+")
@@ -98,10 +158,13 @@ def load_expected_did(path: Path) -> str | None:
     return did
 
 
-def find_slot(config: dict, slot_id: str) -> dict | None:
+def find_slot(config: dict, slot_id: str, day: date | None = None) -> dict | None:
     for slot in config.get("slots", []):
         if slot["id"] == slot_id:
             return slot
+    for random_slot in config.get("random_slots", []):
+        if random_slot["id"] == slot_id:
+            return resolved_random_slot(random_slot, day or date.today())
     return None
 
 
@@ -119,7 +182,7 @@ def due_slots(config: dict, now: datetime) -> list[tuple[dict, datetime]]:
     """
     due = []
     for day in (now.date() - timedelta(days=1), now.date()):
-        for slot in config.get("slots", []):
+        for slot in [*config.get("slots", []), *resolved_random_slots(config, day)]:
             slot_time = datetime.strptime(slot["time_jst"], "%H:%M").time()
             scheduled_at = datetime.combine(day, slot_time, tzinfo=now.tzinfo)
             if timedelta(0) <= now - scheduled_at <= CATCHUP_WINDOW:
@@ -254,9 +317,11 @@ def main(argv: list[str] | None = None) -> int:
         selected = due_slots(config, now)
         print(f"due: {len(selected)} slot(s) in the last 2 hours")
     elif args.slot is not None:
-        slot = find_slot(config, args.slot)
+        slot = find_slot(config, args.slot, now.date())
         if slot is None:
-            known = ", ".join(s["id"] for s in config.get("slots", []))
+            known = ", ".join(
+                [s["id"] for s in config.get("slots", [])]
+                + [s["id"] for s in config.get("random_slots", [])])
             print(f"error: unknown slot '{args.slot}'. known slots: {known}")
             return finish(1, "configuration_error", "unknown slot")
         selected = [(slot, now)]
@@ -268,6 +333,14 @@ def main(argv: list[str] | None = None) -> int:
             text = render_slot(slot, now)
             problems = validate_post(text)
             print(f"--- slot {slot['id']} ({slot['time_jst']} JST) ---")
+            print(text)
+            if problems:
+                print("validation failed: " + "; ".join(problems))
+                return finish(1, "validation_error", "; ".join(problems))
+        for slot in resolved_random_slots(config, now.date()):
+            text = render_slot(slot, now)
+            problems = validate_post(text)
+            print(f"--- random slot {slot['id']} (today {slot['time_jst']} JST) ---")
             print(text)
             if problems:
                 print("validation failed: " + "; ".join(problems))
