@@ -88,6 +88,15 @@ def load_config(path: Path) -> dict:
         end = _window_minutes(random_slot.get("window_end_jst"), "window_end_jst")
         if end - start < 15 or (end - start) % 15 != 0:
             raise ValueError("random slot window must span a positive multiple of 15 minutes")
+        times_per_day = random_slot.get("times_per_day", 1)
+        if isinstance(times_per_day, bool) or not isinstance(times_per_day, int) \
+                or not 1 <= times_per_day <= 8:
+            raise ValueError("random slot times_per_day must be an integer between 1 and 8")
+        if (end - start) % times_per_day != 0 \
+                or ((end - start) // times_per_day) % 15 != 0:
+            raise ValueError(
+                "random slot window must divide into times_per_day segments "
+                "of a multiple of 15 minutes each")
         if not isinstance(template, str):
             raise ValueError("random slot template must be a string")
         probe = {"id": slot_id, "time_jst": random_slot["window_start_jst"],
@@ -107,30 +116,41 @@ def _window_minutes(value: object, field: str) -> int:
     return hour * 60 + minute
 
 
-def resolved_random_slot(random_slot: dict, day: date) -> dict:
-    """One random slot materialised for `day` as a normal slot dict.
-
-    The time is a deterministic function of the date and the slot id
-    (SHA-256 seed), so every tick of the day agrees on the same time
-    without extra state, while the time still changes from day to day.
-    The chosen time sits on the 15-minute grid inside the window, so
-    the regular 15-minute trigger and catch-up logic apply unchanged.
-    """
-    start = _window_minutes(random_slot["window_start_jst"], "window_start_jst")
-    end = _window_minutes(random_slot["window_end_jst"], "window_end_jst")
-    ticks = (end - start) // 15
-    seed = hashlib.sha256(f"{day.isoformat()}:{random_slot['id']}".encode("utf-8")).digest()
-    offset = int.from_bytes(seed[:8], "big") % ticks
-    minutes = start + offset * 15
-    return {
-        "id": random_slot["id"],
-        "time_jst": f"{minutes // 60:02d}:{minutes % 60:02d}",
-        "template": random_slot["template"],
-    }
-
-
 def resolved_random_slots(config: dict, day: date) -> list[dict]:
-    return [resolved_random_slot(rs, day) for rs in config.get("random_slots", [])]
+    """Random slots materialised for `day` as normal slot dicts.
+
+    Each random slot fires times_per_day times (default 1). The window
+    is split into that many equal segments and one time is chosen per
+    segment, so the posts spread across the window instead of
+    clustering. Each time is a deterministic function of the date, the
+    slot id and the segment index (SHA-256 seed), so every tick of the
+    day agrees on the same times without extra state, while the times
+    still change from day to day. Chosen times sit on the 15-minute
+    grid, so the regular trigger and catch-up logic apply unchanged.
+    With several firings the materialised ids gain a _1/_2/... suffix
+    so state and record keys stay distinct per firing.
+    """
+    resolved = []
+    for random_slot in config.get("random_slots", []):
+        start = _window_minutes(random_slot["window_start_jst"], "window_start_jst")
+        end = _window_minutes(random_slot["window_end_jst"], "window_end_jst")
+        times_per_day = random_slot.get("times_per_day", 1)
+        segment = (end - start) // times_per_day
+        ticks = segment // 15
+        for index in range(times_per_day):
+            seed = hashlib.sha256(
+                f"{day.isoformat()}:{random_slot['id']}:{index}".encode("utf-8")
+            ).digest()
+            offset = int.from_bytes(seed[:8], "big") % ticks
+            minutes = start + index * segment + offset * 15
+            slot_id = random_slot["id"] if times_per_day == 1 \
+                else f"{random_slot['id']}_{index + 1}"
+            resolved.append({
+                "id": slot_id,
+                "time_jst": f"{minutes // 60:02d}:{minutes % 60:02d}",
+                "template": random_slot["template"],
+            })
+    return resolved
 
 
 _DID_RE = re.compile(r"did:[a-z0-9]+:[^\s/?#]+")
@@ -162,9 +182,14 @@ def find_slot(config: dict, slot_id: str, day: date | None = None) -> dict | Non
     for slot in config.get("slots", []):
         if slot["id"] == slot_id:
             return slot
-    for random_slot in config.get("random_slots", []):
-        if random_slot["id"] == slot_id:
-            return resolved_random_slot(random_slot, day or date.today())
+    for slot in resolved_random_slots(config, day or date.today()):
+        if slot["id"] == slot_id:
+            return slot
+    # A random slot's base id selects its first firing of the day.
+    if any(rs["id"] == slot_id for rs in config.get("random_slots", [])):
+        for slot in resolved_random_slots(config, day or date.today()):
+            if slot["id"] == slot_id or slot["id"].startswith(slot_id + "_"):
+                return slot
     return None
 
 
