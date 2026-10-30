@@ -481,5 +481,13 @@
       "time_jst": "23:45",
       "template": "こんばんは。🌙\nサイトに載せるゲーム案募集中。\nhttps://minigame-b1qp.onrender.com/"
     }
+  ],
+  "random_slots": [
+    {
+      "id": "follower_recruit",
+      "window_start_jst": "09:00",
+      "window_end_jst": "21:00",
+      "template": "こちらblueskybot、フォロワー募集中！📱"
+    }
   ]
 }
