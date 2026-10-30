@@ -487,6 +487,7 @@
       "id": "follower_recruit",
       "window_start_jst": "09:00",
       "window_end_jst": "21:00",
+      "times_per_day": 3,
       "template": "こちらblueskybot、フォロワー募集中！📱"
     }
   ]
